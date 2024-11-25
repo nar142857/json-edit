@@ -1,0 +1,48 @@
+{
+  "main": "index.html",
+  "logo": "logo.png",
+  "preload": "preload.js",
+  "pluginSetting": {
+    "single": false
+  },
+  "features": [
+    {
+      "code": "json",
+      "explain": "Json 格式化编辑",
+      "cmds": [
+        "Json",
+        {
+          "type": "regex",
+          "minLength": 2,
+          "match": "/^\\s*(\\{[\\s\\S]*\\}|\\[[\\s\\S]*\\])\\s*$/",
+          "label": "Json"
+        },
+        {
+          "type": "files",
+          "fileType": "file",
+          "maxLength": 1,
+          "match": "/\\.json$/i",
+          "label": "Json"
+        }
+      ]
+    },
+    {
+      "code": "urlparams2json",
+      "explain": "URL Params 转 JSON",
+      "cmds": [
+        {
+          "type": "regex",
+          "minLength": 6,
+          "match": "/^(?:[^\\s=&]{1,40}=[^\\s=&]*&)+[^\\s=&]{1,40}=[^\\s=&]*$/",
+          "label": "URL Params 转 JSON"
+        }
+      ]
+    }
+  ],
+  "name": "jsoneditor",
+  "pluginName": "JSON 编辑器",
+  "description": "JSON 格式化处理",
+  "author": "福州猿力信息科技有限公司",
+  "homepage": "https://u.tools",
+  "version": "1.7.1"
+}

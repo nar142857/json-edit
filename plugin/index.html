@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>JSON Editor</title>
+  <link rel="stylesheet" href="dist/bundle.css">
+  <style>
+    html, body, #root {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    #root {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .content {
+      flex: 1;
+      display: flex;
+    }
+
+    #inputEditor, #outputEditor {
+      flex: 1;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="content">
+      <div id="inputEditor"></div>
+      <div id="outputEditor"></div>
+    </div>
+  </div>
+  <script>
+    window.MonacoEnvironment = {
+      getWorkerUrl: function (workerId, label) {
+        return `data:text/javascript;charset=utf-8,importScripts('${window.location.origin}/dist/${workerId}.worker.js');`;
+      }
+    };
+  </script>
+  <script src="dist/bundle.js"></script>
+</body>
+</html> 
