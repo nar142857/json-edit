@@ -2,8 +2,7 @@
  * 导入所需的React和UI组件依赖
  */
 import React from 'react'
-import { Snackbar } from '@material-ui/core'
-import { Alert } from '@material-ui/lab'
+import { Snackbar, Alert } from '@mui/material'
 
 /**
  * 消息提示组件
@@ -25,7 +24,7 @@ const MessageSnackbar = ({ messageData }) => {
       anchorOrigin={{ vertical: 'top', horizontal: 'center' }} // 显示在顶部中间
     >
       {/* Alert组件用于显示不同类型的提示信息 */}
-      <Alert severity={messageData.type}>
+      <Alert severity={messageData.type} variant="filled">
         {messageData.message}
       </Alert>
     </Snackbar>

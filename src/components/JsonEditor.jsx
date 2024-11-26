@@ -7,22 +7,43 @@ import {
   Button, 
   Tooltip, 
   Divider,
-  ThemeProvider 
-} from '@material-ui/core'
+  ThemeProvider,
+  createTheme,
+  StyledEngineProvider
+} from '@mui/material'
 import {
-  FormatIcon,
-  ExpandIcon,
-  CollapseIcon,
-  StripCommentsIcon,
-  CompressIcon,
-  EscapeIcon,
-  XmlIcon,
-  TypeScriptIcon
-} from './icons'
+  FormatAlignLeft as FormatIcon,
+  UnfoldMore as ExpandIcon,
+  UnfoldLess as CollapseIcon,
+  Delete as StripCommentsIcon,
+  Compress as CompressIcon,
+  Code as EscapeIcon,
+  Description as XmlIcon,
+  Code as TypeScriptIcon
+} from '@mui/icons-material'
 import { JsonService, FileService } from '../services'
-import { darkTheme, lightTheme } from '../themes'
 import MessageSnackbar from './MessageSnackbar'
 import './JsonEditor.css'
+
+// 创建暗色主题
+const darkTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#90caf9'
+    }
+  }
+})
+
+// 创建亮色主题
+const lightTheme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#1976d2'
+    }
+  }
+})
 
 /**
  * JSON编辑器组件
@@ -63,33 +84,25 @@ class JsonEditor extends Component {
    * 组件挂载后的生命周期钩子
    */
   componentDidMount() {
-    // 初始化输入编辑器
-    this.initInputEditor()
-    
-    // 初始化输出编辑器
-    this.outputEditor = monaco.editor.create(document.querySelector('#outputEditor'), {
-      language: 'json',
-      theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
-      readOnly: true,
-      automaticLayout: true,
-      minimap: { enabled: false },
-      contextmenu: false,
-      scrollBeyondLastLine: false,
-      showFoldingControls: 'always',
-      links: false
+    // 先设置主题
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    this.setState({ theme: isDark ? 'dark' : 'light' }, () => {
+      // 在主题设置完成后初始化编辑器
+      this.initInputEditor()
+      this.initOutputEditor()
+      
+      // 监听插件进入
+      this.listenPluginEnter()
+      
+      // 监听粘贴事件
+      this.listenPaste()
+      
+      // 监听快捷键
+      window.addEventListener('keydown', this.keyDownAction, true)
+      
+      // 监听主题变化
+      this.listenThemeChange()
     })
-    
-    // 监听插件进入
-    this.listenPluginEnter()
-    
-    // 监听粘贴事件
-    this.listenPaste()
-    
-    // 监听快捷键
-    window.addEventListener('keydown', this.keyDownAction, true)
-    
-    // 监听主题变化
-    this.listenThemeChange()
   }
 
   /**
@@ -106,12 +119,45 @@ class JsonEditor extends Component {
       minimap: { enabled: false },
       contextmenu: false,
       scrollBeyondLastLine: false,
+      folding: true,
+      foldingStrategy: 'auto',
+      foldingHighlight: true,
+      foldingImportsByDefault: true,
+      unfoldOnClickAfterEndOfLine: true,
       showFoldingControls: 'always',
-      links: false
+      links: false,
+      lineNumbers: 'on',
+      renderValidationDecorations: 'on',
+      wordWrap: 'on'
     })
 
     // 监听编辑器内容变化
     this.inputEditor.onDidChangeModelContent(this.inputEditorChange)
+  }
+
+  /**
+   * 初始化输出编辑器
+   */
+  initOutputEditor = () => {
+    this.outputEditor = monaco.editor.create(document.querySelector('#outputEditor'), {
+      language: 'json',
+      theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
+      readOnly: true,
+      automaticLayout: true,
+      minimap: { enabled: false },
+      contextmenu: false,
+      scrollBeyondLastLine: false,
+      folding: true,
+      foldingStrategy: 'auto',
+      foldingHighlight: true,
+      foldingImportsByDefault: true,
+      unfoldOnClickAfterEndOfLine: true,
+      showFoldingControls: 'always',
+      links: false,
+      lineNumbers: 'on',
+      renderValidationDecorations: 'on',
+      wordWrap: 'on'
+    })
   }
 
   /**
@@ -302,7 +348,7 @@ class JsonEditor extends Component {
       let match
       while ((match = jsonRegex.exec(value)) !== null) {
         try {
-          // 获取完整匹配和捕获组
+          // 获取整匹配和捕获组
           const fullMatch = match[0]
           const prefix = fullMatch.includes(':') ? fullMatch.split(':')[0] + ': ' : ''
           const jsonStr = match[1] || match[2] // 第一个捕获组是带前缀的，第二个是独立的JSON
@@ -353,64 +399,162 @@ class JsonEditor extends Component {
   }
 
   /**
+   * 重新格式化
+   */
+  handleReFormat = () => {
+    try {
+      const value = this.inputEditor.getValue()
+      const formatted = JSON.stringify(JSON.parse(value), null, 2)
+      this.inputEditor.setValue(formatted)
+    } catch (e) {
+      this.setState({ messageData: { type: 'error', message: 'Invalid JSON format' } })
+    }
+  }
+
+  /**
+   * 全部展开
+   */
+  handleExpandAll = () => {
+    try {
+      const editor = this.state.jsFilter ? this.outputEditor : this.inputEditor
+      if (!editor) return
+
+      // 使用编辑器内置命令
+      editor.trigger('fold', 'editor.unfoldAll', null)
+      editor.focus()
+    } catch (e) {
+      console.error('���开失败:', e)
+      this.setState({ messageData: { type: 'error', message: '展开失败' } })
+    }
+  }
+
+  /**
+   * 全部折叠
+   */
+  handleCollapseAll = () => {
+    try {
+      const editor = this.state.jsFilter ? this.outputEditor : this.inputEditor
+      if (!editor) return
+
+      // 使用编辑器内置命令
+      editor.trigger('fold', 'editor.foldAll', null)
+      editor.focus()
+    } catch (e) {
+      console.error('折叠失败:', e)
+      this.setState({ messageData: { type: 'error', message: '折叠失败' } })
+    }
+  }
+
+  /**
+   * 压缩复制
+   */
+  handleCompressCopy = () => {
+    try {
+      const value = this.inputEditor.getValue()
+      const compressed = JSON.stringify(JSON.parse(value))
+      window.utools.copyText(compressed)
+      this.setState({ messageData: { type: 'success', message: 'Copied' } })
+    } catch (e) {
+      this.setState({ messageData: { type: 'error', message: 'Invalid JSON format' } })
+    }
+  }
+
+  /**
+   * 压缩引号复制
+   */
+  handleCompressQuoteCopy = () => {
+    try {
+      const value = this.inputEditor.getValue()
+      const compressed = JSON.stringify(JSON.parse(value)).replace(/"/g, '\\"')
+      window.utools.copyText(compressed)
+      this.setState({ messageData: { type: 'success', message: 'Copied' } })
+    } catch (e) {
+      this.setState({ messageData: { type: 'error', message: 'Invalid JSON format' } })
+    }
+  }
+
+  /**
    * 渲染组件
    * @returns {JSX.Element} 渲染的React组件
    */
   render() {
     const { theme, jsFilter, placeholder, messageData } = this.state
+    const currentTheme = theme === 'dark' ? darkTheme : lightTheme
 
     return (
-      <ThemeProvider theme={theme === 'dark' ? darkTheme : lightTheme}>
-        <div className="content">
-          <div 
-            id="inputEditor"
-            style={{ width: jsFilter ? '50%' : '100%' }}
-          />
-          <div
-            id="outputEditor"
-            style={{ display: jsFilter ? 'block' : 'none' }}
-          />
-        </div>
-
-        {/* 显示占位符提示 */}
-        {placeholder && (
-          <div className="placeholder">
-            URL Params、XML、YAML 粘贴自动转为 JSON
-          </div>
-        )}
-
-        <div className="footer">
-          <div className="left">this</div>
-          
-          {/* JS过滤器输入框 */}
-          <div className="right">
-            <input
-              onChange={this.handleJsFilterInputChange}
-              placeholder=' JS 过滤; 示例 ".key.subkey"、"[0][1]"、".map(x=>x.val)"'
-              value={jsFilter}
-              type="text"
+      <StyledEngineProvider injectFirst>
+        <ThemeProvider theme={currentTheme}>
+          <div className="content">
+            <div 
+              id="inputEditor"
+              style={{ width: jsFilter ? '50%' : '100%' }}
+            />
+            <div
+              id="outputEditor"
+              style={{ display: jsFilter ? 'block' : 'none' }}
             />
           </div>
 
-          {/* 工具按钮区域 */}
-          <div className="handle">
-            <Tooltip title="重新格式化「Alt + F」" placement="top">
-              <Button
-                onClick={this.handleReFormat}
-                disableFocusRipple
-                size="small"
-              >
-                <FormatIcon />
-              </Button>
-            </Tooltip>
+          {/* 显示占位符提示 */}
+          {placeholder && (
+            <div className="placeholder">
+              URL Params、XML、YAML 粘贴自动转为 JSON
+            </div>
+          )}
 
-            {/* 其他工具按钮 */}
+          <div className="footer">
+            <div className="left">this</div>
+            
+            {/* JS过滤器输入框 */}
+            <div className="right">
+              <input
+                onChange={this.handleJsFilterInputChange}
+                placeholder=' JS 过滤; 示例 ".key.subkey"、"[0][1]"、".map(x=>x.val)"'
+                value={jsFilter}
+                type="text"
+              />
+            </div>
+
+            {/* 工具按钮区域 */}
+            <div className="handle">
+              <Tooltip title="重新格式化「Alt + F」" placement="top">
+                <Button onClick={this.handleReFormat} size="small">
+                  <FormatIcon />
+                </Button>
+              </Tooltip>
+
+              <Tooltip title="全部展开「Alt + . + Shift」" placement="top">
+                <Button onClick={this.handleExpandAll} size="small">
+                  <ExpandIcon />
+                </Button>
+              </Tooltip>
+
+              <Tooltip title="全部折叠「Alt + .」" placement="top">
+                <Button onClick={this.handleCollapseAll} size="small">
+                  <CollapseIcon />
+                </Button>
+              </Tooltip>
+
+              <Divider orientation="vertical" flexItem />
+
+              <Tooltip title="压缩复制「Alt + C」" placement="top">
+                <Button onClick={this.handleCompressCopy} size="small">
+                  <CompressIcon />
+                </Button>
+              </Tooltip>
+
+              <Tooltip title="压缩引号复制「Alt + \」" placement="top">
+                <Button onClick={this.handleCompressQuoteCopy} size="small">
+                  <EscapeIcon />
+                </Button>
+              </Tooltip>
+            </div>
           </div>
-        </div>
 
-        {/* 消息提示组件 */}
-        <MessageSnackbar messageData={messageData} />
-      </ThemeProvider>
+          {/* 消息提示组件 */}
+          <MessageSnackbar messageData={messageData} />
+        </ThemeProvider>
+      </StyledEngineProvider>
     )
   }
 }

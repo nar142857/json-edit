@@ -1,4 +1,20 @@
+# Dependencies
 node_modules
 dist
+
+# Build output
+plugin/dist
 plugin/dist/*
+*.bundle.js
+*.bundle.css
+*.worker.js
+*.LICENSE.txt
+
+# IDE
+.idea
+.vscode
+
+# OS
+.DS_Store
+Thumbs.db
 

@@ -9,32 +9,33 @@
     "package": "node scripts/package.js"
   },
   "dependencies": {
-    "@material-ui/core": "^4.12.4",
-    "@material-ui/icons": "^4.11.3",
-    "@material-ui/lab": "^4.0.0-alpha.61",
-    "monaco-editor": "0.30.1",
-    "react": "^17.0.2",
-    "react-dom": "^17.0.2"
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@mui/material": "^5.14.18",
+    "@mui/icons-material": "^5.14.18",
+    "monaco-editor": "^0.44.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.16.0",
-    "@babel/preset-env": "^7.16.0",
-    "@babel/preset-react": "^7.16.0",
+    "@babel/core": "^7.23.3",
+    "@babel/preset-env": "^7.23.3",
+    "@babel/preset-react": "^7.23.3",
     "assert": "^2.1.0",
-    "babel-loader": "^8.2.3",
+    "babel-loader": "^9.1.3",
     "buffer": "^6.0.3",
-    "copy-webpack-plugin": "^9.0.1",
-    "css-loader": "^6.5.1",
+    "copy-webpack-plugin": "^11.0.0",
+    "css-loader": "^6.8.1",
     "file-loader": "^6.2.0",
-    "mini-css-extract-plugin": "^2.9.2",
-    "monaco-editor-webpack-plugin": "6.0.0",
+    "mini-css-extract-plugin": "^2.7.6",
+    "monaco-editor-webpack-plugin": "^7.1.0",
     "path-browserify": "^1.0.1",
     "process": "^0.11.10",
     "stream-browserify": "^3.0.0",
-    "style-loader": "^3.3.1",
-    "url": "^0.11.4",
+    "style-loader": "^3.3.3",
+    "url": "^0.11.3",
     "util": "^0.12.5",
-    "webpack": "^5.64.0",
-    "webpack-cli": "^4.9.1"
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
   }
 }
