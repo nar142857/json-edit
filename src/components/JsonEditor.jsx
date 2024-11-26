@@ -191,6 +191,11 @@ class JsonEditor extends Component {
 
   /**
    * 处理输入编辑器内容变化
+   * 主要功能：
+   * 1. 监听编辑器内容变化
+   * 2. 根据内容是否为空控制 placeholder 的显示/隐藏
+   * 3. 尝试解析 JSON 内容
+   * 4. 如果存在 JS 过滤器则更新输出
    */
   inputEditorChange = () => {
     try {

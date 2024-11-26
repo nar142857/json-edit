@@ -9,6 +9,7 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, 'plugin/dist'),
     filename: 'bundle.js',
+    assetModuleFilename: '[name][ext]'
   },
   module: {
     rules: [
@@ -28,7 +29,7 @@ module.exports = {
       },
       {
         test: /\.(woff|woff2|eot|ttf|otf)$/,
-        use: ['file-loader']
+        type: 'asset/resource'
       }
     ]
   },
@@ -49,20 +50,20 @@ module.exports = {
       ],
     }),
     new MonacoWebpackPlugin({
-      languages: ['json', 'javascript', 'css', 'html']
+      languages: ['json', 'javascript', 'css', 'html'],
+      features: ['find'],
+      filename: '[name].worker.js'
     }),
   ],
   resolve: {
     extensions: ['.js', '.jsx'],
     fallback: {
-      "path": require.resolve("path-browserify"),
-      "buffer": require.resolve("buffer/"),
-      "url": require.resolve("url/"),
-      "stream": require.resolve("stream-browserify"),
-      "util": require.resolve("util/"),
-      "assert": require.resolve("assert/"),
-      "fs": false,
-      "electron": false
+      path: require.resolve('path-browserify'),
+      stream: require.resolve('stream-browserify'),
+      buffer: require.resolve('buffer'),
+      util: require.resolve('util'),
+      assert: require.resolve('assert'),
+      url: require.resolve('url')
     }
   }
-}; 
+} 
