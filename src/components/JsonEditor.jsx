@@ -290,9 +290,11 @@ class JsonEditor extends Component {
    */
   setEditorFormatValue = (value) => {
     try {
-      // 使用正则表达式查找可能的 JSON 字符串
-      const jsonRegex = /({[\s\S]*}|\[[\s\S]*\])/g
-      let formattedValue = value
+      // 匹配所有可能的 JSON 内容
+      // 1. body: {...} 格式
+      // 2. headers: {...} 格式
+      // 3. 独立的 {...} 或 [...] 格式
+      const jsonRegex = /(?:body|headers):\s*({[\s\S]*?}|\[[\s\S]*?\])(?=\s+\w+:|\s*$)|({[\s\S]*?}|\[[\s\S]*?\])(?=\s+\w+:|\s*$)/g
       let lastIndex = 0
       let result = ''
       
@@ -300,19 +302,24 @@ class JsonEditor extends Component {
       let match
       while ((match = jsonRegex.exec(value)) !== null) {
         try {
-          // 尝试解析并格式化 JSON 部分
-          const jsonPart = match[0]
-          const formattedJson = JSON.stringify(JSON.parse(jsonPart), null, 2)
+          // 获取完整匹配和捕获组
+          const fullMatch = match[0]
+          const prefix = fullMatch.includes(':') ? fullMatch.split(':')[0] + ': ' : ''
+          const jsonStr = match[1] || match[2] // 第一个捕获组是带前缀的，第二个是独立的JSON
+          
+          // 尝试解析并格式化 JSON
+          const formattedJson = JSON.stringify(JSON.parse(jsonStr), null, 2)
           
           // 添加 JSON 之前的普通文本
           result += value.slice(lastIndex, match.index)
-          // 添加格式化后的 JSON
-          result += formattedJson
+          // 添加前缀（如果有）和格式化后的 JSON
+          result += prefix + formattedJson
           
-          lastIndex = match.index + match[0].length
+          lastIndex = match.index + fullMatch.length
         } catch (e) {
-          // 如果解析失败，说明不是有效的 JSON，保持原样
-          continue
+          // 如果解析失败，保持原样
+          result += value.slice(lastIndex, match.index + match[0].length)
+          lastIndex = match.index + match[0].length
         }
       }
       
