@@ -1,0 +1,18 @@
+.placeholder {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(128, 128, 128, 0.6);
+  font-size: 14px;
+  user-select: none;
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+/* 深色主题样式 */
+[data-theme="dark"] .placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}

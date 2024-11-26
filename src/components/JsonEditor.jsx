@@ -1,3 +1,6 @@
+/**
+ * 导入所需的React和其他依赖
+ */
 import React, { Component } from 'react'
 import * as monaco from 'monaco-editor'
 import { 
@@ -19,32 +22,46 @@ import {
 import { JsonService, FileService } from '../services'
 import { darkTheme, lightTheme } from '../themes'
 import MessageSnackbar from './MessageSnackbar'
+import './JsonEditor.css'
 
 /**
  * JSON编辑器组件
+ * 提供JSON格式化、压缩、展开/折叠等功能
  */
 class JsonEditor extends Component {
+  /**
+   * 构造函数
+   * @param {object} props - 组件属性
+   */
   constructor(props) {
     super(props)
     
+    // 初始化状态
     this.state = {
+      // 主题状态,根据系统主题自动切换
       theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+      // 占位符状态
       placeholder: '',
+      // JS过滤器内容
       jsFilter: '',
+      // 消息提示数据
       messageData: null
     }
 
     // 编辑器实例
-    this.inputEditor = null
-    this.outputEditor = null
+    this.inputEditor = null  // 输入编辑器
+    this.outputEditor = null // 输出编辑器
     
-    // 输入内容对象
+    // 存储输入的JSON对象
     this.inputContentObject = null
     
-    // JS过滤延时器
+    // JS过滤器延时处理定时器
     this.jsFilterInputDelayTimer = null
   }
 
+  /**
+   * 组件挂载后的生命周期钩子
+   */
   componentDidMount() {
     // 初始化输入编辑器
     this.initInputEditor()
@@ -79,6 +96,7 @@ class JsonEditor extends Component {
    * 初始化输入编辑器
    */
   initInputEditor = () => {
+    // 创建Monaco编辑器实例
     this.inputEditor = monaco.editor.create(document.querySelector('#inputEditor'), {
       language: 'json',
       theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
@@ -92,26 +110,26 @@ class JsonEditor extends Component {
       links: false
     })
 
+    // 监听编辑器内容变化
     this.inputEditor.onDidChangeModelContent(this.inputEditorChange)
   }
 
   /**
-   * 监听插件进入
+   * 监听插件进入事件
    */
   listenPluginEnter = () => {
     window.utools.onPluginEnter(({ type, payload }) => {
       if (type === 'regex') {
-        // 正则匹配进入
         this.setState({ placeholder: false, jsFilter: '' })
         this.inputContentObject = null
         this.setEditorFormatValue(payload)
       } else if (type === 'files') {
-        // 文件进入
         this.setState({ placeholder: false, jsFilter: '' })
         this.inputContentObject = null
         this.setEditorFormatValue(window.services.readFileContent(payload[0].path))
-      } else if (this.state.placeholder === '') {
-        this.setState({ placeholder: true })
+      } else {
+        const hasContent = this.inputEditor && this.inputEditor.getValue()
+        this.setState({ placeholder: !hasContent })
       }
       this.inputEditor.focus()
     })
@@ -125,15 +143,15 @@ class JsonEditor extends Component {
       const text = e.clipboardData.getData('text')
       if (!text) return
 
+      // 编辑器为空时的处理
       if (!this.inputEditor.getValue()) {
-        // 编辑器为空时直接格式化粘贴内容
         e.stopPropagation()
         e.preventDefault()
         this.setEditorFormatValue(text)
         return
       }
 
-      // 检查是否全选
+      // 检查是否全选状态
       const selection = this.inputEditor.getSelection()
       if (
         selection.startLineNumber === 1 && 
@@ -147,11 +165,11 @@ class JsonEditor extends Component {
         const lastLine = model.getLineCount()
         const lastColumn = model.getLineContent(lastLine).length + 1
         
+        // 全选状态下的粘贴处理
         if (
           selection.endLineNumber === lastLine && 
           selection.endColumn === lastColumn
         ) {
-          // 全选状态下格式化粘贴内容
           e.stopPropagation()
           e.preventDefault() 
           this.setEditorFormatValue(text)
@@ -161,7 +179,7 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 监听主题变化
+   * 监听系统主题变化
    */
   listenThemeChange = () => {
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
@@ -172,15 +190,18 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 编辑器内容变化处理
+   * 处理输入编辑器内容变化
    */
   inputEditorChange = () => {
     try {
       const value = this.inputEditor.getValue()
+      // 根据编辑器内容设置 placeholder 状态
+      this.setState({ placeholder: !value })
+      
       this.inputContentObject = JSON.parse(value)
       
+      // 存在JS过滤器时更新输出
       if (this.state.jsFilter) {
-        // 有JS过滤器时更新输出
         this.jsFilterOutput()
       }
     } catch (e) {
@@ -189,7 +210,8 @@ class JsonEditor extends Component {
   }
 
   /**
-   * JS过滤器输入变化
+   * 处理JS过滤器输入变化
+   * @param {Event} e - 输入事件对象
    */
   handleJsFilterInputChange = e => {
     const filter = e.target.value
@@ -197,7 +219,7 @@ class JsonEditor extends Component {
 
     if (!filter) return
 
-    // 延时处理过滤
+    // 使用延时器防抖处理
     if (this.jsFilterInputDelayTimer) {
       clearTimeout(this.jsFilterInputDelayTimer)
     }
@@ -222,46 +244,58 @@ class JsonEditor extends Component {
     }, 50)
   }
 
-  // 快捷键处理
+  /**
+   * 处理快捷键事件
+   * @param {KeyboardEvent} e - 键盘事件对象
+   */
   keyDownAction = e => {
+    // 禁用F1帮助
     if (e.code === 'F1') {
       e.stopPropagation()
       e.preventDefault()
       return
     }
 
+    // 只处理Alt组合键
     if (!e.altKey) return
     
     e.stopPropagation()
     e.preventDefault()
 
+    // 处理不同的快捷键组合
     switch (e.code) {
-      case 'KeyF':
+      case 'KeyF':  // Alt + F: 重新格式化
         this.handleReFormat()
         break
-      case 'KeyC': 
+      case 'KeyC':  // Alt + C: 压缩复制
         this.handleCompressCopy()
         break
-      case 'Backslash':
+      case 'Backslash':  // Alt + \: 压缩引号复制
         this.handleCompressQuoteCopy()
         break
-      case 'Period':
+      case 'Period':  // Alt + .: 展开/折叠
         e.shiftKey ? this.handleExpandAll() : this.handleCollapseAll()
         break
     }
   }
 
-  // 其他处理方法...
-
+  /**
+   * 设置编辑器格式化的值
+   * @param {string} value - 要格式化的JSON字符串
+   */
   setEditorFormatValue = (value) => {
     try {
       const formattedValue = JSON.stringify(JSON.parse(value), null, 2)
       this.inputEditor.setValue(formattedValue)
+      this.setState({ placeholder: false })
     } catch (e) {
       this.setState({ messageData: { type: 'error', message: 'Invalid JSON format' } })
     }
   }
 
+  /**
+   * 执行JS过滤器并输出结果
+   */
   jsFilterOutput = () => {
     if (!this.inputContentObject || this.inputContentObject instanceof Error) {
       this.setState({ messageData: { type: 'error', message: 'Invalid JSON content' } })
@@ -276,6 +310,10 @@ class JsonEditor extends Component {
     }
   }
 
+  /**
+   * 渲染组件
+   * @returns {JSX.Element} 渲染的React组件
+   */
   render() {
     const { theme, jsFilter, placeholder, messageData } = this.state
 
@@ -292,6 +330,7 @@ class JsonEditor extends Component {
           />
         </div>
 
+        {/* 显示占位符提示 */}
         {placeholder && (
           <div className="placeholder">
             URL Params、XML、YAML 粘贴自动转为 JSON
@@ -301,6 +340,7 @@ class JsonEditor extends Component {
         <div className="footer">
           <div className="left">this</div>
           
+          {/* JS过滤器输入框 */}
           <div className="right">
             <input
               onChange={this.handleJsFilterInputChange}
@@ -310,6 +350,7 @@ class JsonEditor extends Component {
             />
           </div>
 
+          {/* 工具按钮区域 */}
           <div className="handle">
             <Tooltip title="重新格式化「Alt + F」" placement="top">
               <Button
@@ -325,6 +366,7 @@ class JsonEditor extends Component {
           </div>
         </div>
 
+        {/* 消息提示组件 */}
         <MessageSnackbar messageData={messageData} />
       </ThemeProvider>
     )
