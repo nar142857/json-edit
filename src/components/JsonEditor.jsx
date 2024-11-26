@@ -286,15 +286,45 @@ class JsonEditor extends Component {
 
   /**
    * 设置编辑器格式化的值
-   * @param {string} value - 要格式化的JSON字符串
+   * @param {string} value - 要格式化的字符串
    */
   setEditorFormatValue = (value) => {
     try {
-      const formattedValue = JSON.stringify(JSON.parse(value), null, 2)
-      this.inputEditor.setValue(formattedValue)
+      // 使用正则表达式查找可能的 JSON 字符串
+      const jsonRegex = /({[\s\S]*}|\[[\s\S]*\])/g
+      let formattedValue = value
+      let lastIndex = 0
+      let result = ''
+      
+      // 查找所有可能的 JSON 部分
+      let match
+      while ((match = jsonRegex.exec(value)) !== null) {
+        try {
+          // 尝试解析并格式化 JSON 部分
+          const jsonPart = match[0]
+          const formattedJson = JSON.stringify(JSON.parse(jsonPart), null, 2)
+          
+          // 添加 JSON 之前的普通文本
+          result += value.slice(lastIndex, match.index)
+          // 添加格式化后的 JSON
+          result += formattedJson
+          
+          lastIndex = match.index + match[0].length
+        } catch (e) {
+          // 如果解析失败，说明不是有效的 JSON，保持原样
+          continue
+        }
+      }
+      
+      // 添加最后一部分普通文本
+      result += value.slice(lastIndex)
+      
+      this.inputEditor.setValue(result)
       this.setState({ placeholder: false })
     } catch (e) {
-      this.setState({ messageData: { type: 'error', message: 'Invalid JSON format' } })
+      // 如果出现错误，直接显示原始内容
+      this.inputEditor.setValue(value)
+      this.setState({ placeholder: false })
     }
   }
 
