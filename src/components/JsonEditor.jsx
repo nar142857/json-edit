@@ -193,7 +193,9 @@ class JsonEditor extends Component {
       if (!this.inputEditor.getValue()) {
         e.stopPropagation()
         e.preventDefault()
-        this.setEditorFormatValue(text)
+        this.inputEditor.setValue(text)
+        // 使用 requestAnimationFrame 确保在下一帧执行格式化
+        requestAnimationFrame(() => this.handleReFormat())
         return
       }
 
@@ -218,7 +220,9 @@ class JsonEditor extends Component {
         ) {
           e.stopPropagation()
           e.preventDefault() 
-          this.setEditorFormatValue(text)
+          this.inputEditor.setValue(text)
+          // 使用 requestAnimationFrame 确保在下一帧执行格式化
+          requestAnimationFrame(() => this.handleReFormat())
         }
       }
     }, true)
@@ -336,11 +340,21 @@ class JsonEditor extends Component {
    */
   setEditorFormatValue = (value) => {
     try {
+      // 尝试直接解析整个字符串是否为 JSON
+      try {
+        const jsonObj = JSON.parse(value)
+        this.inputEditor.setValue(JSON.stringify(jsonObj, null, 2))
+        this.setState({ placeholder: false })
+        return
+      } catch (e) {
+        // 不是完整的 JSON，继续下面的处理
+      }
+
       // 匹配所有可能的 JSON 内容
       // 1. body: {...} 格式
       // 2. headers: {...} 格式
       // 3. 独立的 {...} 或 [...] 格式
-      const jsonRegex = /(?:body|headers):\s*({[\s\S]*?}|\[[\s\S]*?\])(?=\s+\w+:|\s*$)|({[\s\S]*?}|\[[\s\S]*?\])(?=\s+\w+:|\s*$)/g
+      const jsonRegex = /(?:body|headers):\s*({[\s\S]*?}|\[[\s\S]*?\])(?=\s*(?:\w+:|\s*$))|({[\s\S]*?}|\[[\s\S]*?\])(?=\s*(?:\w+:|\s*$))/g
       let lastIndex = 0
       let result = ''
       
@@ -348,7 +362,7 @@ class JsonEditor extends Component {
       let match
       while ((match = jsonRegex.exec(value)) !== null) {
         try {
-          // 获取整匹配和捕获组
+          // 获取完整匹配和捕获组
           const fullMatch = match[0]
           const prefix = fullMatch.includes(':') ? fullMatch.split(':')[0] + ': ' : ''
           const jsonStr = match[1] || match[2] // 第一个捕获组是带前缀的，第二个是独立的JSON
@@ -376,6 +390,7 @@ class JsonEditor extends Component {
       this.setState({ placeholder: false })
     } catch (e) {
       // 如果出现错误，直接显示原始内容
+      console.error('格式化错误:', e)
       this.inputEditor.setValue(value)
       this.setState({ placeholder: false })
     }
@@ -404,10 +419,55 @@ class JsonEditor extends Component {
   handleReFormat = () => {
     try {
       const value = this.inputEditor.getValue()
-      const formatted = JSON.stringify(JSON.parse(value), null, 2)
-      this.inputEditor.setValue(formatted)
+      
+      // 尝试直接解析整个字符串是否为 JSON
+      try {
+        const jsonObj = JSON.parse(value)
+        this.inputEditor.setValue(JSON.stringify(jsonObj, null, 2))
+        return
+      } catch (e) {
+        // 不是完整的 JSON，继续下面的处理
+      }
+
+      // 匹配所有可能的 JSON 内容
+      // 1. body: {...} 格式
+      // 2. headers: {...} 格式
+      // 3. 独立的 {...} 或 [...] 格式
+      const jsonRegex = /(?:body|headers):\s*({[\s\S]*?}|\[[\s\S]*?\])(?=\s*(?:\w+:|\s*$))|({[\s\S]*?}|\[[\s\S]*?\])(?=\s*(?:\w+:|\s*$))/g
+      let lastIndex = 0
+      let result = ''
+      
+      // 查找所有可能的 JSON 部分
+      let match
+      while ((match = jsonRegex.exec(value)) !== null) {
+        try {
+          // 获取完整匹配和捕获组
+          const fullMatch = match[0]
+          const prefix = fullMatch.includes(':') ? fullMatch.split(':')[0] + ': ' : ''
+          const jsonStr = match[1] || match[2] // 第一个捕获组是带前缀的，第二个是独立的JSON
+          
+          // 尝试解析并格式化 JSON
+          const formattedJson = JSON.stringify(JSON.parse(jsonStr), null, 2)
+          
+          // 添加 JSON 之前的普通文本
+          result += value.slice(lastIndex, match.index)
+          // 添加前缀（如果有）和格式化后的 JSON
+          result += prefix + formattedJson
+          
+          lastIndex = match.index + fullMatch.length
+        } catch (e) {
+          // 如果解析失败，保持原样
+          result += value.slice(lastIndex, match.index + match[0].length)
+          lastIndex = match.index + match[0].length
+        }
+      }
+      
+      // 添加最后一部分普通文本
+      result += value.slice(lastIndex)
+      
+      this.inputEditor.setValue(result)
     } catch (e) {
-      this.setState({ messageData: { type: 'error', message: 'Invalid JSON format' } })
+      this.setState({ messageData: { type: 'error', message: '格式化失败' } })
     }
   }
 
@@ -423,7 +483,7 @@ class JsonEditor extends Component {
       editor.trigger('fold', 'editor.unfoldAll', null)
       editor.focus()
     } catch (e) {
-      console.error('���开失败:', e)
+      console.error('开失败:', e)
       this.setState({ messageData: { type: 'error', message: '展开失败' } })
     }
   }
