@@ -45,7 +45,6 @@ module.exports = {
       patterns: [
         { from: 'public/index.html', to: '../index.html' },
         { from: 'plugin.json', to: '../plugin.json' },
-        { from: '.utools/preload.js', to: '../preload.js' },
         { from: 'public/logo.png', to: '../logo.png' },
       ],
     }),

@@ -22,7 +22,8 @@ import {
   Description as XmlIcon,
   Code as TypeScriptIcon,
   Label as LabelIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  Save as SaveIcon
 } from '@mui/icons-material'
 import { JsonService, FileService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
@@ -316,6 +317,14 @@ class JsonEditor extends Component {
       return
     }
 
+    // Command/Ctrl + S 触发保存功能
+    if ((e.metaKey || e.ctrlKey) && e.code === 'KeyS') {
+      e.stopPropagation()
+      e.preventDefault()
+      this.handleSaveFile()
+      return
+    }
+
     // Command/Ctrl + T 触发标签功能
     if ((e.metaKey || e.ctrlKey) && e.code === 'KeyT') {
       e.stopPropagation()
@@ -570,6 +579,67 @@ class JsonEditor extends Component {
   }
 
   /**
+   * 处理保存文件
+   */
+  handleSaveFile = async () => {
+    try {
+      const value = this.inputEditor.getValue()
+      if (!value.trim()) {
+        this.setState({ messageData: { type: 'error', message: '内容为空，无需保存' } })
+        return
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      const fileName = `${this.state.label || 'json'}_${timestamp}.json`
+      
+      // 使用 uTools API 保存文件
+      const filePath = window.utools.showSaveDialog({
+        title: '保存 JSON 文件',
+        defaultPath: fileName,
+        filters: [
+          { name: 'JSON', extensions: ['json'] }
+        ]
+      })
+
+      if (!filePath) {
+        // 用户取消了保存
+        return
+      }
+
+      let contentToSave
+      try {
+        // 尝试格式化 JSON
+        contentToSave = JSON.stringify(JSON.parse(value), null, 2)
+      } catch (e) {
+        // 如果不是有效的 JSON，保存原始内容
+        contentToSave = value
+      }
+
+      try {
+        // 使用 window.services 保存文件
+        await window.services.writeFile(filePath, contentToSave)
+        this.setState({ messageData: { type: 'success', message: '文件保存成功' } })
+      } catch (e) {
+        console.error('写入文件失败:', e)
+        this.setState({ 
+          messageData: { 
+            type: 'error', 
+            message: '保存文件失败，请检查文件权限: ' + e.message
+          } 
+        })
+      }
+    } catch (e) {
+      console.error('保存文件错误:', e)
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '保存文件失败: ' + (e.message || '未知错误') 
+        } 
+      })
+    }
+  }
+
+  /**
    * 渲染组件
    * @returns {JSX.Element} 渲染的React组件
    */
@@ -666,6 +736,12 @@ class JsonEditor extends Component {
                 <Tooltip title="添加标签「Ctrl/⌘ + T」" placement="top">
                   <Button onClick={this.handleLabelClick} size="small">
                     <LabelIcon />
+                  </Button>
+                </Tooltip>
+
+                <Tooltip title="保存文件「Ctrl/⌘ + S」" placement="top">
+                  <Button onClick={this.handleSaveFile} size="small">
+                    <SaveIcon />
                   </Button>
                 </Tooltip>
               </div>

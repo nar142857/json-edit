@@ -1,1 +1,35 @@
-const{ipcRenderer}=require("electron"),fs=require("fs/promises"),path=require("path"),{Buffer,Blob}=require("buffer"),url=require("url");window.ipc=ipcRenderer,window.fs={async saveFileToPath(e,r,t,o,a){t=Array.isArray(t)?t:[t];const i=window.utools.showSaveDialog({title:a,defaultPath:path.resolve(window.utools.getPath("downloads"),r),filters:[{extensions:t,name:o}],buttonLabel:"保存"});i&&(await fs.writeFile(i,Buffer.from(e)),window.utools.shellShowItemInFolder(i))},async readOpenFileText(e,r,t){e=Array.isArray(e)?e:[e];const o=window.utools.showOpenDialog({title:t,properties:["openFile"],buttonLabel:"导入",filters:[{extensions:e,name:r}]});if(!o)throw"未发现合法文件";const a=o[0];if(!a)throw"未发现合法文件";try{return{text:await fs.readFile(a,{encoding:"utf-8"}),path:a,name:path.basename(a)}}catch(e){throw e}},getFilenameFromUrl(e){const r=url.parse(e,!0,!0);return path.basename(r.pathname)}};
+// 确保 window.services 存在
+if (typeof window === 'undefined') {
+    global.window = {}
+}
+if (!window.services) {
+    window.services = {}
+}
+
+const fs = require('fs')
+
+// 定义服务方法
+window.services = {
+    readFile: (filePath, encoding = 'utf8') => {
+        return new Promise((resolve, reject) => {
+            fs.readFile(filePath, encoding, (error, data) => {
+                if (error) {
+                    reject(error)
+                } else {
+                    resolve(data)
+                }
+            })
+        })
+    },
+    writeFile: (filePath, content, encoding = 'utf8') => {
+        return new Promise((resolve, reject) => {
+            fs.writeFile(filePath, content, encoding, (error) => {
+                if (error) {
+                    reject(error)
+                } else {
+                    resolve(true)
+                }
+            })
+        })
+    }
+}
