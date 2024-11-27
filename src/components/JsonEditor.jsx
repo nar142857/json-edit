@@ -29,9 +29,10 @@ import {
   Close as CloseIcon,
   Save as SaveIcon,
   Folder as FolderIcon,
-  InsertDriveFile as FileIcon
+  InsertDriveFile as FileIcon,
+  History as HistoryIcon
 } from '@mui/icons-material'
-import { JsonService, FileService } from '../services'
+import { JsonService, FileService, EditorStateService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
 import './JsonEditor.css'
 
@@ -80,7 +81,11 @@ class JsonEditor extends Component {
       showLabelInput: false,
       label: '',
       fileMenuAnchor: null,
-      jsonFiles: []
+      jsonFiles: [],
+      historyMenuAnchor: null,
+      history: [],
+      lastSavedContent: '', // 添加最后保存的内容状态
+      isEditorReady: false // 添加编辑器准备状态
     }
 
     // 编辑器实例
@@ -92,46 +97,41 @@ class JsonEditor extends Component {
     
     // JS过滤器延时处理定时器
     this.jsFilterInputDelayTimer = null
+    this.autoSaveTimer = null
+    this.needsSave = false
   }
 
   /**
-   * 组件挂载后的生命周期钩子
+   * 初始化编辑器
    */
-  componentDidMount() {
-    // 先设置主题
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    this.setState({ theme: isDark ? 'dark' : 'light' }, () => {
-      // 在主题设置完成后初始化编辑器
-      this.initInputEditor()
-      this.initOutputEditor()
-      
-      // 监听插件进入
-      this.listenPluginEnter()
-      
-      // 监听粘贴事件
-      this.listenPaste()
-      
-      // 监听快捷键
-      window.addEventListener('keydown', this.keyDownAction, true)
-      
-      // 监听主题变化
-      this.listenThemeChange()
+  initializeEditor = () => {
+    if (!this.inputEditor) return
+
+    // 监听编辑器内容变化
+    this.inputEditor.onDidChangeModelContent(() => {
+      this.handleEditorContentChange()
     })
+
+    // 启动自动保存
+    this.startAutoSave()
+
+    // 监听窗口关闭事件
+    window.addEventListener('beforeunload', this.handleBeforeUnload)
+
+    this.setState({ isEditorReady: true })
   }
 
-  /**
-   * 初始化输入编辑器
-   */
-  initInputEditor = () => {
-    // 创建Monaco编辑器实例
-    this.inputEditor = monaco.editor.create(document.querySelector('#inputEditor'), {
+  componentDidMount() {
+    // 创建输入编辑器
+    this.inputEditor = monaco.editor.create(document.getElementById('inputEditor'), {
+      value: '',
       language: 'json',
       theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
       formatOnPaste: true,
       formatOnType: true,
       automaticLayout: true,
       minimap: { enabled: false },
-      contextmenu: false,
+      contextmenu: true,
       scrollBeyondLastLine: false,
       folding: true,
       foldingStrategy: 'auto',
@@ -142,24 +142,20 @@ class JsonEditor extends Component {
       links: false,
       lineNumbers: 'on',
       renderValidationDecorations: 'on',
-      wordWrap: 'on'
+      wordWrap: 'on',
+      fontSize: 14,
+      tabSize: 2
     })
 
-    // 监听编辑器内容变化
-    this.inputEditor.onDidChangeModelContent(this.inputEditorChange)
-  }
-
-  /**
-   * 初始化输出编辑器
-   */
-  initOutputEditor = () => {
-    this.outputEditor = monaco.editor.create(document.querySelector('#outputEditor'), {
+    // 创建输出编辑器
+    this.outputEditor = monaco.editor.create(document.getElementById('outputEditor'), {
+      value: '',
       language: 'json',
       theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
       readOnly: true,
       automaticLayout: true,
       minimap: { enabled: false },
-      contextmenu: false,
+      contextmenu: true,
       scrollBeyondLastLine: false,
       folding: true,
       foldingStrategy: 'auto',
@@ -170,87 +166,157 @@ class JsonEditor extends Component {
       links: false,
       lineNumbers: 'on',
       renderValidationDecorations: 'on',
-      wordWrap: 'on'
+      wordWrap: 'on',
+      fontSize: 14,
+      tabSize: 2
     })
+
+    // 初始化编辑器
+    this.initializeEditor()
+
+    // 监听主题变化
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      const newTheme = e.matches ? 'dark' : 'light'
+      this.setState({ theme: newTheme })
+      this.updateEditorTheme(newTheme)
+    })
+
+    // 监听粘贴事件
+    this.listenPaste()
+
+    // 监听插件进入
+    this.listenPluginEnter()
+
+    // 监听键盘快捷键
+    window.addEventListener('keydown', this.handleKeyDown, true)
+  }
+
+  componentWillUnmount() {
+    // 清理定时器和事件监听
+    if (this.autoSaveTimer) {
+      clearInterval(this.autoSaveTimer)
+    }
+    window.removeEventListener('beforeunload', this.handleBeforeUnload)
+
+    // 销毁编辑器实例
+    if (this.inputEditor) {
+      this.inputEditor.dispose()
+    }
+    if (this.outputEditor) {
+      this.outputEditor.dispose()
+    }
+
+    window.removeEventListener('keydown', this.handleKeyDown, true)
   }
 
   /**
-   * 监听插件进入事件
+   * 加载编辑器状态
    */
-  listenPluginEnter = () => {
-    window.utools.onPluginEnter(({ type, payload }) => {
-      if (type === 'regex') {
-        this.setState({ placeholder: false, jsFilter: '' })
-        this.inputContentObject = null
-        this.setEditorFormatValue(payload)
-      } else if (type === 'files') {
-        this.setState({ placeholder: false, jsFilter: '' })
-        this.inputContentObject = null
-        this.setEditorFormatValue(window.services.readFileContent(payload[0].path))
-      } else {
-        const hasContent = this.inputEditor && this.inputEditor.getValue()
-        this.setState({ placeholder: !hasContent })
+  loadEditorState = () => {
+    try {
+      if (!this.inputEditor) return
+
+      const { currentContent, currentLabel } = window.fs.getEditorHistory()
+      if (currentContent) {
+        this.inputEditor.setValue(currentContent)
+        this.setState({ lastSavedContent: currentContent })
       }
-      this.inputEditor.focus()
-    })
+      if (currentLabel) {
+        this.setState({ label: currentLabel })
+      }
+    } catch (e) {
+      console.error('加载编辑器状态失败:', e)
+    }
   }
 
   /**
-   * 监听粘贴事件
+   * 启动自动保存
    */
-  listenPaste = () => {
-    document.querySelector('#inputEditor').addEventListener('paste', e => {
-      const text = e.clipboardData.getData('text')
-      if (!text) return
-
-      // 编辑器为空时的处理
-      if (!this.inputEditor.getValue()) {
-        e.stopPropagation()
-        e.preventDefault()
-        this.inputEditor.setValue(text)
-        // 使用 requestAnimationFrame 确保在下一帧执行格式化
-        requestAnimationFrame(() => this.handleReFormat())
-        return
+  startAutoSave = () => {
+    if (this.autoSaveTimer) {
+      clearInterval(this.autoSaveTimer)
+    }
+    this.autoSaveTimer = setInterval(() => {
+      if (this.state.isEditorReady) {
+        this.saveEditorState()
       }
+    }, 30000)
+  }
 
-      // 检查是否全选状态
-      const selection = this.inputEditor.getSelection()
-      if (
-        selection.startLineNumber === 1 && 
-        selection.startColumn === 1 &&
-        (
-          selection.startLineNumber !== selection.endLineNumber ||
-          selection.startColumn !== selection.endColumn
-        )
-      ) {
-        const model = this.inputEditor.getModel()
-        const lastLine = model.getLineCount()
-        const lastColumn = model.getLineContent(lastLine).length + 1
-        
-        // 全选状态下的粘贴处理
-        if (
-          selection.endLineNumber === lastLine && 
-          selection.endColumn === lastColumn
-        ) {
-          e.stopPropagation()
-          e.preventDefault() 
-          this.inputEditor.setValue(text)
-          // 使用 requestAnimationFrame 确保在下一帧执行格式化
-          requestAnimationFrame(() => this.handleReFormat())
+  /**
+   * 保存编辑器状态
+   */
+  saveEditorState = () => {
+    try {
+      // 只有当内容需要保存时才进行保存
+      if (this.needsSave) {
+        const content = this.inputEditor.getValue().trim()
+        if (content) {
+          EditorStateService.saveEditorState(content, this.state.label)
+          this.setState({ lastSavedContent: content })
+          this.needsSave = false
         }
       }
-    }, true)
+    } catch (e) {
+      console.error('保存编辑器状态失败:', e)
+    }
   }
 
   /**
-   * 监听系统主题变化
+   * 处理窗口关闭前的保存
    */
-  listenThemeChange = () => {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-      const isDark = e.matches
-      this.setState({ theme: isDark ? 'dark' : 'light' })
-      monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
+  handleBeforeUnload = () => {
+    if (this.needsSave) {
+      this.saveEditorState()
+    }
+  }
+
+  /**
+   * 加载历史记录
+   */
+  loadHistory = () => {
+    try {
+      const { history } = EditorStateService.getEditorHistory()
+      this.setState({ history })
+    } catch (e) {
+      console.error('加载历史记录失败:', e)
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '加载历史记录失败: ' + e.message 
+        } 
+      })
+    }
+  }
+
+  /**
+   * 处理历史菜单点击
+   */
+  handleHistoryMenuClick = (event) => {
+    this.setState({ historyMenuAnchor: event.currentTarget })
+    this.loadHistory()
+  }
+
+  /**
+   * 处理历史菜单关闭
+   */
+  handleHistoryMenuClose = () => {
+    this.setState({ historyMenuAnchor: null })
+  }
+
+  /**
+   * 处理历史记录选择
+   */
+  handleHistorySelect = (item) => {
+    this.inputEditor.setValue(item.content)
+    this.setState({ 
+      historyMenuAnchor: null,
+      label: item.label,
+      showLabelInput: true,
+      lastSavedContent: item.content,
+      messageData: { type: 'success', message: '历史记录加载成功' }
     })
+    this.needsSave = false
   }
 
   /**
@@ -261,20 +327,23 @@ class JsonEditor extends Component {
    * 3. 尝解析 JSON 内容
    * 4. 如果存在 JS 过滤器则更新输出
    */
-  inputEditorChange = () => {
+  handleEditorContentChange = () => {
     try {
-      const value = this.inputEditor.getValue()
-      // 根据编辑器内容设置 placeholder 状态
-      this.setState({ placeholder: !value })
+      const currentContent = this.inputEditor.getValue()
       
-      this.inputContentObject = JSON.parse(value)
-      
-      // 存在JS过滤器时更新输出
+      // 更新输出编辑器
       if (this.state.jsFilter) {
-        this.jsFilterOutput()
+        this.updateOutputWithFilter(currentContent)
+      } else {
+        this.outputEditor.setValue(currentContent)
+      }
+
+      // 标记需要保存
+      if (currentContent.trim() && currentContent !== this.state.lastSavedContent) {
+        this.needsSave = true
       }
     } catch (e) {
-      this.inputContentObject = e
+      console.error('处理编辑器内容变化失败:', e)
     }
   }
 
@@ -605,9 +674,14 @@ class JsonEditor extends Component {
    */
   handleSaveFile = async () => {
     try {
-      const value = this.inputEditor.getValue()
-      if (!value.trim()) {
-        this.setState({ messageData: { type: 'error', message: '内容为空，无需保存' } })
+      const content = this.inputEditor.getValue()
+      if (!content.trim()) {
+        this.setState({ 
+          messageData: { 
+            type: 'warning', 
+            message: '内容为空，无保存' 
+          } 
+        })
         return
       }
 
@@ -631,31 +705,26 @@ class JsonEditor extends Component {
       let contentToSave
       try {
         // 尝试格式化 JSON
-        contentToSave = JSON.stringify(JSON.parse(value), null, 2)
+        contentToSave = JSON.stringify(JSON.parse(content), null, 2)
       } catch (e) {
         // 如果不是有效的 JSON，保存原始内容
-        contentToSave = value
+        contentToSave = content
       }
 
-      try {
-        // 使用 window.services 保存文件
-        await window.services.writeFile(filePath, contentToSave)
-        this.setState({ messageData: { type: 'success', message: '文件保存成功' } })
-      } catch (e) {
-        console.error('写入文件失败:', e)
-        this.setState({ 
-          messageData: { 
-            type: 'error', 
-            message: '保存文件失败，请检查文件权限: ' + e.message
-          } 
-        })
-      }
+      // 使用 window.services 保存文件
+      await window.services.writeFile(filePath, contentToSave)
+      this.setState({ 
+        messageData: { 
+          type: 'success', 
+          message: '文件保存成功' 
+        } 
+      })
     } catch (e) {
-      console.error('保存文件错误:', e)
+      console.error('保存文件失败:', e)
       this.setState({ 
         messageData: { 
           type: 'error', 
-          message: '保存文件失败: ' + (e.message || '未知错误') 
+          message: '保存文件失败: ' + e.message 
         } 
       })
     }
@@ -725,11 +794,192 @@ class JsonEditor extends Component {
   }
 
   /**
+   * 监听粘贴事件
+   */
+  listenPaste = () => {
+    document.querySelector('#inputEditor').addEventListener('paste', e => {
+      const text = e.clipboardData.getData('text')
+      if (!text) return
+
+      // 编辑器为空时的处理
+      if (!this.inputEditor.getValue()) {
+        e.stopPropagation()
+        e.preventDefault()
+        this.inputEditor.setValue(text)
+        // 使用 requestAnimationFrame 确保在下一帧执行格式化
+        requestAnimationFrame(() => this.handleReFormat())
+        return
+      }
+
+      // 检查是否全选状态
+      const selection = this.inputEditor.getSelection()
+      if (
+        selection.startLineNumber === 1 && 
+        selection.startColumn === 1 &&
+        (
+          selection.startLineNumber !== selection.endLineNumber ||
+          selection.startColumn !== selection.endColumn
+        )
+      ) {
+        const model = this.inputEditor.getModel()
+        const lastLine = model.getLineCount()
+        const lastColumn = model.getLineContent(lastLine).length + 1
+        
+        // 全选态下的粘贴处理
+        if (
+          selection.endLineNumber === lastLine && 
+          selection.endColumn === lastColumn
+        ) {
+          e.stopPropagation()
+          e.preventDefault() 
+          this.inputEditor.setValue(text)
+          // 使用 requestAnimationFrame 确保在下一帧执行格式化
+          requestAnimationFrame(() => this.handleReFormat())
+        }
+      }
+    }, true)
+  }
+
+  /**
+   * 监听插件进入事件
+   */
+  listenPluginEnter = () => {
+    window.utools.onPluginEnter(({ type, payload }) => {
+      if (type === 'regex') {
+        this.setState({ placeholder: false, jsFilter: '' })
+        this.inputContentObject = null
+        this.setEditorFormatValue(payload)
+      } else if (type === 'files') {
+        this.setState({ placeholder: false, jsFilter: '' })
+        this.inputContentObject = null
+        this.setEditorFormatValue(window.services.readFileContent(payload[0].path))
+      } else {
+        const hasContent = this.inputEditor && this.inputEditor.getValue()
+        this.setState({ placeholder: !hasContent })
+      }
+      this.inputEditor.focus()
+    })
+  }
+
+  /**
+   * 处理键盘快捷键
+   */
+  handleKeyDown = (e) => {
+    // 获取操作系统信息
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+
+    // Ctrl/Command + S: 保存文件
+    if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 's') {
+      e.preventDefault()
+      this.handleSaveFile()
+      return
+    }
+
+    // Ctrl/Command + T: 切换标签输入框显示状态
+    if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 't') {
+      e.preventDefault()
+      this.setState(prevState => ({ showLabelInput: !prevState.showLabelInput }))
+      return
+    }
+
+    // Alt + F: 格式化
+    if (e.altKey && e.key === 'f') {
+      e.preventDefault()
+      this.handleReFormat()
+      return
+    }
+
+    // Alt + C: 压缩
+    if (e.altKey && e.key === 'c') {
+      e.preventDefault()
+      this.handleCompress()
+      return
+    }
+
+    // Alt + X: 转义
+    if (e.altKey && e.key === 'x') {
+      e.preventDefault()
+      this.handleEscape()
+      return
+    }
+
+    // Alt + U: 反转义
+    if (e.altKey && e.key === 'u') {
+      e.preventDefault()
+      this.handleUnescape()
+      return
+    }
+
+    // Alt + S: 去除注释
+    if (e.altKey && e.key === 's') {
+      e.preventDefault()
+      this.handleStripComments()
+      return
+    }
+
+    // Alt + E: 展开所有
+    if (e.altKey && e.key === 'e') {
+      e.preventDefault()
+      this.handleExpand()
+      return
+    }
+
+    // Alt + W: 折叠所有
+    if (e.altKey && e.key === 'w') {
+      e.preventDefault()
+      this.handleCollapse()
+      return
+    }
+
+    // Alt + T: 转为 TypeScript
+    if (e.altKey && e.key === 't') {
+      e.preventDefault()
+      this.handleToTypeScript()
+      return
+    }
+
+    // Alt + M: 转为 XML
+    if (e.altKey && e.key === 'm') {
+      e.preventDefault()
+      this.handleToXml()
+      return
+    }
+  }
+
+  /**
+   * 处理标签输入框关闭
+   */
+  handleLabelClose = () => {
+    this.setState({ showLabelInput: false })
+  }
+
+  /**
+   * 处理标签输入
+   */
+  handleLabelChange = (e) => {
+    this.setState({ label: e.target.value })
+  }
+
+  /**
+   * 处理标签输入框按键
+   */
+  handleLabelKeyDown = (e) => {
+    // 按 Enter 或 Escape 关闭标签输入框
+    if (e.key === 'Enter' || e.key === 'Escape') {
+      e.preventDefault()
+      this.setState({ showLabelInput: false })
+    }
+  }
+
+  /**
    * 渲染组件
    * @returns {JSX.Element} 渲染的React组件
    */
   render() {
-    const { theme, jsFilter, placeholder, messageData, showLabelInput, label, fileMenuAnchor, jsonFiles } = this.state
+    const { 
+      theme, jsFilter, placeholder, messageData, showLabelInput, label, 
+      fileMenuAnchor, jsonFiles, historyMenuAnchor, history 
+    } = this.state
     const currentTheme = theme === 'dark' ? darkTheme : lightTheme
 
     return (
@@ -808,6 +1058,36 @@ class JsonEditor extends Component {
                         <ListItemText 
                           primary={file.name} 
                           secondary={new Date(file.modifiedTime).toLocaleString()}
+                        />
+                      </MenuItem>
+                    ))
+                  )}
+                </Menu>
+
+                <Tooltip title="历史记录" placement="top">
+                  <Button onClick={this.handleHistoryMenuClick} size="small">
+                    <HistoryIcon />
+                  </Button>
+                </Tooltip>
+
+                <Menu
+                  anchorEl={historyMenuAnchor}
+                  open={Boolean(historyMenuAnchor)}
+                  onClose={this.handleHistoryMenuClose}
+                >
+                  {history.length === 0 ? (
+                    <MenuItem disabled>
+                      <ListItemText primary="没有历史记录" />
+                    </MenuItem>
+                  ) : (
+                    history.map(item => (
+                      <MenuItem key={item.id} onClick={() => this.handleHistorySelect(item)}>
+                        <ListItemIcon>
+                          <FileIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary={item.label || '未命名'}
+                          secondary={new Date(item.timestamp).toLocaleString()}
                         />
                       </MenuItem>
                     ))

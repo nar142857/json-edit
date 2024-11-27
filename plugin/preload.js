@@ -13,6 +13,44 @@ const path = require("path")
 const {Buffer, Blob} = require("buffer")
 const url = require("url")
 
+// 将 fs 模块挂载到 window.utools 对象
+if (!window.utools) {
+  window.utools = {}
+}
+window.utools.fs = fs
+
+// 获取缓存文件路径
+const getCachePath = () => {
+  const tempPath = window.utools.getPath('temp')
+  return path.join(tempPath, 'json-editor-cache.json')
+}
+
+// 读取缓存
+const readCache = () => {
+  try {
+    const cachePath = getCachePath()
+    if (fs.existsSync(cachePath)) {
+      const content = fs.readFileSync(cachePath, 'utf-8')
+      return JSON.parse(content)
+    }
+  } catch (e) {
+    console.error('读取缓存失败:', e)
+  }
+  return { history: [] }
+}
+
+// 写入缓存
+const writeCache = (data) => {
+  try {
+    const cachePath = getCachePath()
+    fs.writeFileSync(cachePath, JSON.stringify(data, null, 2), 'utf-8')
+    return true
+  } catch (e) {
+    console.error('写入缓存失败:', e)
+    return false
+  }
+}
+
 // 定义服务方法
 window.services = {
     readFile: (filePath, encoding = 'utf8') => {
@@ -36,6 +74,26 @@ window.services = {
                 }
             })
         })
+    },
+    // 获取应用目录
+    getAppDir() {
+        return window.utools.getPath('userData')
+    },
+    // 检查文件是否存在
+    existsSync(path) {
+        return fs.existsSync(path)
+    },
+    // 创建目录
+    mkdirSync(path, options) {
+        return fs.mkdirSync(path, options)
+    },
+    // 读取文件
+    readFileSync(path, encoding) {
+        return fs.readFileSync(path, encoding)
+    },
+    // 写入文件
+    writeFileSync(path, data, encoding) {
+        return fs.writeFileSync(path, data, encoding)
     }
 }
 
@@ -103,6 +161,38 @@ window.fs = {
     } catch (e) {
       console.error('获取文件列表失败:', e)
       return []
+    }
+  },
+  // 保存编辑器状态到缓存
+  saveEditorState(content, label) {
+    const cache = readCache()
+    const timestamp = new Date().getTime()
+    
+    // 添加新记录到历史
+    cache.history = cache.history || []
+    cache.history.unshift({
+      content,
+      label,
+      timestamp,
+      id: timestamp.toString()
+    })
+
+    // 只保留最近50条记录
+    cache.history = cache.history.slice(0, 50)
+
+    // 保存当前状态
+    cache.currentContent = content
+    cache.currentLabel = label
+
+    return writeCache(cache)
+  },
+  // 获取编辑器历史记录
+  getEditorHistory() {
+    const cache = readCache()
+    return {
+      history: cache.history || [],
+      currentContent: cache.currentContent || '',
+      currentLabel: cache.currentLabel || ''
     }
   }
 }
