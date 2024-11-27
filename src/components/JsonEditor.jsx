@@ -187,11 +187,21 @@ class JsonEditor extends Component {
     // 监听插件进入
     this.listenPluginEnter()
 
+    // 监听插件退出
+    window.utools.onPluginOut(() => {
+      this.saveEditorState()
+    })
+
     // 监听键盘快捷键
     window.addEventListener('keydown', this.handleKeyDown, true)
   }
 
   componentWillUnmount() {
+    // 组件卸载前保存
+    if (this.needsSave) {
+      this.saveEditorState()
+    }
+
     // 清理定时器和事件监听
     if (this.autoSaveTimer) {
       clearInterval(this.autoSaveTimer)
@@ -237,10 +247,10 @@ class JsonEditor extends Component {
       clearInterval(this.autoSaveTimer)
     }
     this.autoSaveTimer = setInterval(() => {
-      if (this.state.isEditorReady) {
+      if (this.state.isEditorReady && this.needsSave) {
         this.saveEditorState()
       }
-    }, 30000)
+    }, 30000) // 每30秒保存一次
   }
 
   /**
@@ -248,14 +258,11 @@ class JsonEditor extends Component {
    */
   saveEditorState = () => {
     try {
-      // 只有当内容需要保存时才进行保存
-      if (this.needsSave) {
-        const content = this.inputEditor.getValue().trim()
-        if (content) {
-          EditorStateService.saveEditorState(content, this.state.label)
-          this.setState({ lastSavedContent: content })
-          this.needsSave = false
-        }
+      const content = this.inputEditor.getValue().trim()
+      if (content) {
+        EditorStateService.saveEditorState(content, this.state.label)
+        this.setState({ lastSavedContent: content })
+        this.needsSave = false
       }
     } catch (e) {
       console.error('保存编辑器状态失败:', e)
