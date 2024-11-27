@@ -587,6 +587,20 @@ class JsonEditor extends Component {
   }
 
   /**
+   * 生成本地时间戳
+   */
+  getLocalTimestamp = () => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    const hours = String(now.getHours()).padStart(2, '0')
+    const minutes = String(now.getMinutes()).padStart(2, '0')
+    const seconds = String(now.getSeconds()).padStart(2, '0')
+    return `${year}-${month}-${day}T${hours}-${minutes}-${seconds}`
+  }
+
+  /**
    * 处理保存文件
    */
   handleSaveFile = async () => {
@@ -597,7 +611,7 @@ class JsonEditor extends Component {
         return
       }
 
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      const timestamp = this.getLocalTimestamp()
       const fileName = `${this.state.label || 'json'}_${timestamp}.json`
       
       // 使用 uTools API 保存文件
@@ -687,9 +701,17 @@ class JsonEditor extends Component {
     try {
       const content = await window.services.readFile(filePath)
       this.inputEditor.setValue(content)
+
+      // 从文件路径中提取文件名，去掉时间戳和扩展名
+      const fileName = filePath.split('/').pop()
+        .replace(/\.json$/, '') // 去掉扩展名
+        .replace(/_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/, '') // 去掉时间戳
+
       this.setState({ 
         fileMenuAnchor: null,
-        messageData: { type: 'success', message: '文件加载成功' }
+        messageData: { type: 'success', message: '文件加载成功' },
+        label: fileName,
+        showLabelInput: true
       })
     } catch (e) {
       console.error('读取文件失败:', e)
