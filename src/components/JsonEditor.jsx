@@ -10,7 +10,11 @@ import {
   ThemeProvider,
   createTheme,
   StyledEngineProvider,
-  IconButton
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemText,
+  ListItemIcon
 } from '@mui/material'
 import {
   FormatAlignLeft as FormatIcon,
@@ -23,7 +27,9 @@ import {
   Code as TypeScriptIcon,
   Label as LabelIcon,
   Close as CloseIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Folder as FolderIcon,
+  InsertDriveFile as FileIcon
 } from '@mui/icons-material'
 import { JsonService, FileService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
@@ -72,7 +78,9 @@ class JsonEditor extends Component {
       // 消息提示数据
       messageData: null,
       showLabelInput: false,
-      label: ''
+      label: '',
+      fileMenuAnchor: null,
+      jsonFiles: []
     }
 
     // 编辑器实例
@@ -640,11 +648,66 @@ class JsonEditor extends Component {
   }
 
   /**
+   * 加载文件列表
+   */
+  loadJsonFiles = async () => {
+    try {
+      const files = await window.fs.getJsonFiles()
+      this.setState({ jsonFiles: files })
+    } catch (e) {
+      console.error('加载文件列表失败:', e)
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '加载文件列表失败: ' + e.message 
+        } 
+      })
+    }
+  }
+
+  /**
+   * 处理文件菜单点击
+   */
+  handleFileMenuClick = (event) => {
+    this.setState({ fileMenuAnchor: event.currentTarget })
+    this.loadJsonFiles()
+  }
+
+  /**
+   * 处理文件菜单关闭
+   */
+  handleFileMenuClose = () => {
+    this.setState({ fileMenuAnchor: null })
+  }
+
+  /**
+   * 处理文件选择
+   */
+  handleFileSelect = async (filePath) => {
+    try {
+      const content = await window.services.readFile(filePath)
+      this.inputEditor.setValue(content)
+      this.setState({ 
+        fileMenuAnchor: null,
+        messageData: { type: 'success', message: '文件加载成功' }
+      })
+    } catch (e) {
+      console.error('读取文件失败:', e)
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '读取文件失败: ' + e.message 
+        } 
+      })
+    }
+  }
+
+  /**
    * 渲染组件
    * @returns {JSX.Element} 渲染的React组件
    */
   render() {
-    const { theme, jsFilter, placeholder, messageData, showLabelInput, label } = this.state
+    const { theme, jsFilter, placeholder, messageData, showLabelInput, label, fileMenuAnchor, jsonFiles } = this.state
     const currentTheme = theme === 'dark' ? darkTheme : lightTheme
 
     return (
@@ -699,6 +762,36 @@ class JsonEditor extends Component {
               </div>
 
               <div className="handle">
+                <Tooltip title="文件列表" placement="top">
+                  <Button onClick={this.handleFileMenuClick} size="small">
+                    <FolderIcon />
+                  </Button>
+                </Tooltip>
+
+                <Menu
+                  anchorEl={fileMenuAnchor}
+                  open={Boolean(fileMenuAnchor)}
+                  onClose={this.handleFileMenuClose}
+                >
+                  {jsonFiles.length === 0 ? (
+                    <MenuItem disabled>
+                      <ListItemText primary="没有保存的文件" />
+                    </MenuItem>
+                  ) : (
+                    jsonFiles.map(file => (
+                      <MenuItem key={file.path} onClick={() => this.handleFileSelect(file.path)}>
+                        <ListItemIcon>
+                          <FileIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary={file.name} 
+                          secondary={new Date(file.modifiedTime).toLocaleString()}
+                        />
+                      </MenuItem>
+                    ))
+                  )}
+                </Menu>
+
                 <Tooltip title="重新格式化「Alt + F」" placement="top">
                   <Button onClick={this.handleReFormat} size="small">
                     <FormatIcon />
