@@ -49,8 +49,41 @@ class JsonService {
     return result
   }
 
-  static evalJsInContext(filter, context) {
+  /**
+   * 在指定上下文中执行JS过滤器
+   * @param {string} filter - JS过滤器表达式
+   * @param {object} context - 执行上下文
+   * @returns {string} 执行结果的JSON字符串
+   */
+  evalJsInContext(filter, context) {
     try {
+      // 处理简单的点号访问
+      if (filter.startsWith('.')) {
+        const path = filter.split('.').filter(Boolean)
+        let result = context
+        for (const key of path) {
+          result = result[key]
+        }
+        return JSON.stringify(result, null, 2)
+      }
+
+      // 处理数组访问
+      if (filter.match(/^\[\d+\]/)) {
+        const indices = filter.match(/\d+/g).map(Number)
+        let result = context
+        for (const index of indices) {
+          result = result[index]
+        }
+        return JSON.stringify(result, null, 2)
+      }
+
+      // 处理复杂表达式
+      if (filter.includes('map(') || filter.includes('filter(') || filter.includes('reduce(')) {
+        const result = (new Function('context', `with(context){return ${filter}}`)).call(null, context)
+        return JSON.stringify(result, null, 2)
+      }
+
+      // 处理其他情况
       const result = (new Function('context', `with(context){return ${filter}}`)).call(null, context)
       return JSON.stringify(result, null, 2)
     } catch (e) {
