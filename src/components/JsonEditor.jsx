@@ -249,7 +249,7 @@ class JsonEditor extends Component {
    * 主要功能：
    * 1. 监听编辑器内容变化
    * 2. 根据内容是否为空控制 placeholder 的显示/隐藏
-   * 3. 尝���解析 JSON 内容
+   * 3. 尝解析 JSON 内容
    * 4. 如果存在 JS 过滤器则更新输出
    */
   inputEditorChange = () => {
@@ -316,6 +316,14 @@ class JsonEditor extends Component {
       return
     }
 
+    // Command/Ctrl + T 触发标签功能
+    if ((e.metaKey || e.ctrlKey) && e.code === 'KeyT') {
+      e.stopPropagation()
+      e.preventDefault()
+      this.handleLabelClick()
+      return
+    }
+
     // 只处理Alt组合键
     if (!e.altKey) return
     
@@ -352,7 +360,7 @@ class JsonEditor extends Component {
         this.setState({ placeholder: false })
         return
       } catch (e) {
-        // 不是完整的 JSON，���续下面的处理
+        // 不是完整的 JSON，续下面的处理
       }
 
       // 匹配所有可能的 JSON 内容
@@ -655,7 +663,7 @@ class JsonEditor extends Component {
 
                 <Divider orientation="vertical" flexItem />
 
-                <Tooltip title="添加标签" placement="top">
+                <Tooltip title="添加标签「Ctrl/⌘ + T」" placement="top">
                   <Button onClick={this.handleLabelClick} size="small">
                     <LabelIcon />
                   </Button>
