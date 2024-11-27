@@ -108,20 +108,21 @@
 
 ### 项目结构说明
 /
-├── index.html              # 主入口HTML
-├── index.js               # 主入口JS
-├── preload.js            # uTools预加载脚本
-├── plugin.json           # 插件配置文件
-├── src/
-│   ├── workers/          # Web Worker
-│   │   ├── json.worker.js     # JSON语言服务Worker
-│   │   └── editor.worker.js   # 编辑器Worker
-│   ├── services/         # 核心服务
-│   │   ├── JsonService.js     # JSON处理服务
-│   │   └── FileService.js     # 文件处理服务
-│   └── components/       # UI组件
-│       ├── JsonEditor.jsx     # 主编辑器组件
-│       ├── JsonEditor.css     # 编辑器样式
-│       ├── MessageSnackbar.jsx # 消息提示组件
-│       └── ErrorBoundary.jsx  # 错误边界组件
-└── README.md            # 项目说明文档
+├── public/                # 静态资源目录
+│   ├── index.html        # 主页面
+│   └── logo.png          # 插件图标
+├── plugin/               # uTools 插件目录
+│   ├── dist/            # 打包输出目录
+│   ├── plugin.json      # 插件配置文件
+│   └── preload.js       # 预加载脚本
+├── src/                 # 源代码目录
+│   ├── components/      # React 组件
+│   │   ├── JsonEditor.jsx     # 主编辑器组件
+│   │   ├── JsonEditor.css     # 编辑器样式
+│   │   ├── MessageSnackbar.jsx # 消息提示组件
+│   │   └── ErrorBoundary.jsx  # 错误边界组件
+│   ├── services/        # 服务层
+│   │   └── JsonService.js     # JSON 处理服务
+│   └── index.js         # 入口文件
+├── package.json         # 项目配置文件
+└── webpack.config.js    # Webpack 配置文件

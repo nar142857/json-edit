@@ -44,7 +44,7 @@ module.exports = {
     new CopyPlugin({
       patterns: [
         { from: 'public/index.html', to: '../index.html' },
-        { from: 'plugin.json', to: '../plugin.json' },
+        { from: 'plugin/plugin.json', to: '../plugin.json' },
         { from: 'public/logo.png', to: '../logo.png' },
       ],
     }),
