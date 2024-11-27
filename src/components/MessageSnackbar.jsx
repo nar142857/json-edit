@@ -1,7 +1,7 @@
 /**
  * 导入所需的React和UI组件依赖
  */
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Snackbar, Alert } from '@mui/material'
 
 /**
@@ -13,19 +13,42 @@ import { Snackbar, Alert } from '@mui/material'
  * @returns {JSX.Element|null} 返回消息提示组件或null
  */
 const MessageSnackbar = ({ messageData }) => {
+  // 控制消息显示状态
+  const [open, setOpen] = useState(false)
+  const [message, setMessage] = useState(null)
+
+  // 监听消息数据变化
+  useEffect(() => {
+    if (messageData) {
+      setMessage(messageData)
+      setOpen(true)
+    }
+  }, [messageData])
+
+  // 处理消息关闭
+  const handleClose = (event, reason) => {
+    if (reason === 'clickaway') {
+      return
+    }
+    setOpen(false)
+  }
+
   // 如果没有消息数据则不渲染
-  if (!messageData) return null
+  if (!message) return null
 
   return (
-    // Snackbar组件用于显示临时消息
     <Snackbar 
-      open={true} // 控制消息显示
+      open={open}
       autoHideDuration={3000} // 3秒后自动隐藏
-      anchorOrigin={{ vertical: 'top', horizontal: 'center' }} // 显示在顶部中间
+      onClose={handleClose}
+      anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
     >
-      {/* Alert组件用于显示不同类型的提示信息 */}
-      <Alert severity={messageData.type} variant="filled">
-        {messageData.message}
+      <Alert 
+        onClose={handleClose}
+        severity={message.type} 
+        variant="filled"
+      >
+        {message.message}
       </Alert>
     </Snackbar>
   )
