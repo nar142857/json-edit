@@ -9,7 +9,8 @@ import {
   Divider,
   ThemeProvider,
   createTheme,
-  StyledEngineProvider
+  StyledEngineProvider,
+  IconButton
 } from '@mui/material'
 import {
   FormatAlignLeft as FormatIcon,
@@ -19,7 +20,9 @@ import {
   Compress as CompressIcon,
   Code as EscapeIcon,
   Description as XmlIcon,
-  Code as TypeScriptIcon
+  Code as TypeScriptIcon,
+  Label as LabelIcon,
+  Close as CloseIcon
 } from '@mui/icons-material'
 import { JsonService, FileService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
@@ -66,7 +69,9 @@ class JsonEditor extends Component {
       // JS过滤器内容
       jsFilter: '',
       // 消息提示数据
-      messageData: null
+      messageData: null,
+      showLabelInput: false,
+      label: ''
     }
 
     // 编辑器实例
@@ -244,7 +249,7 @@ class JsonEditor extends Component {
    * 主要功能：
    * 1. 监听编辑器内容变化
    * 2. 根据内容是否为空控制 placeholder 的显示/隐藏
-   * 3. 尝试解析 JSON 内容
+   * 3. 尝���解析 JSON 内容
    * 4. 如果存在 JS 过滤器则更新输出
    */
   inputEditorChange = () => {
@@ -347,7 +352,7 @@ class JsonEditor extends Component {
         this.setState({ placeholder: false })
         return
       } catch (e) {
-        // 不是完整的 JSON，继续下面的处理
+        // 不是完整的 JSON，���续下面的处理
       }
 
       // 匹配所有可能的 JSON 内容
@@ -534,11 +539,34 @@ class JsonEditor extends Component {
   }
 
   /**
+   * 处理标签按钮点击
+   */
+  handleLabelClick = () => {
+    this.setState(prevState => ({
+      showLabelInput: !prevState.showLabelInput
+    }))
+  }
+
+  /**
+   * 处理标签输入变化
+   */
+  handleLabelChange = (e) => {
+    this.setState({ label: e.target.value })
+  }
+
+  /**
+   * 处理关闭标签输入框
+   */
+  handleCloseLabelInput = () => {
+    this.setState({ showLabelInput: false })
+  }
+
+  /**
    * 渲染组件
    * @returns {JSX.Element} 渲染的React组件
    */
   render() {
-    const { theme, jsFilter, placeholder, messageData } = this.state
+    const { theme, jsFilter, placeholder, messageData, showLabelInput, label } = this.state
     const currentTheme = theme === 'dark' ? darkTheme : lightTheme
 
     return (
@@ -546,20 +574,34 @@ class JsonEditor extends Component {
         <ThemeProvider theme={currentTheme}>
           <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
             <div className="content">
-              <div 
-                id="inputEditor"
-                style={{ width: jsFilter ? '50%' : '100%' }}
-              />
-              <div
-                id="outputEditor"
-                style={{ 
-                  width: jsFilter ? '50%' : '0',
-                  display: jsFilter ? 'block' : 'none'
-                }}
-              />
+              {showLabelInput && (
+                <div className="label-input">
+                  <input
+                    value={label}
+                    onChange={this.handleLabelChange}
+                    placeholder="输入标签描述..."
+                    type="text"
+                  />
+                  <IconButton size="small" onClick={this.handleCloseLabelInput}>
+                    <CloseIcon />
+                  </IconButton>
+                </div>
+              )}
+              <div className="editor-container">
+                <div 
+                  id="inputEditor"
+                  style={{ width: jsFilter ? '50%' : '100%' }}
+                />
+                <div
+                  id="outputEditor"
+                  style={{ 
+                    width: jsFilter ? '50%' : '0',
+                    display: jsFilter ? 'block' : 'none'
+                  }}
+                />
+              </div>
             </div>
 
-            {/* 显示占位符提示 */}
             {placeholder && (
               <div className="placeholder">
                 URL Params、XML、YAML 粘贴自动转为 JSON
@@ -569,7 +611,6 @@ class JsonEditor extends Component {
             <div className="footer">
               <div className="left">this</div>
               
-              {/* JS过滤器输入框 */}
               <div className="right">
                 <input
                   onChange={this.handleJsFilterInputChange}
@@ -579,7 +620,6 @@ class JsonEditor extends Component {
                 />
               </div>
 
-              {/* 工具按钮区域 */}
               <div className="handle">
                 <Tooltip title="重新格式化「Alt + F」" placement="top">
                   <Button onClick={this.handleReFormat} size="small">
@@ -612,10 +652,17 @@ class JsonEditor extends Component {
                     <EscapeIcon />
                   </Button>
                 </Tooltip>
+
+                <Divider orientation="vertical" flexItem />
+
+                <Tooltip title="添加标签" placement="top">
+                  <Button onClick={this.handleLabelClick} size="small">
+                    <LabelIcon />
+                  </Button>
+                </Tooltip>
               </div>
             </div>
 
-            {/* 消息提示组件 */}
             <MessageSnackbar messageData={messageData} />
           </div>
         </ThemeProvider>

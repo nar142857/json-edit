@@ -5,6 +5,7 @@
   right: 0;
   bottom: 40px;
   display: flex;
+  flex-direction: column;
 }
 
 .placeholder {
@@ -122,6 +123,44 @@
 
 /* 深色主题下的输入框样式 */
 [data-theme="dark"] .footer .right input {
+  background-color: #ffffff !important;
+  color: #333333;
+  border-color: #404040;
+}
+
+.label-input {
+  padding: 8px;
+  background-color: var(--footer-background);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+}
+
+.label-input input {
+  flex: 1;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: #ffffff !important;
+  color: var(--text-color);
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+.label-input input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.editor-container {
+  flex: 1;
+  display: flex;
+  position: relative;
+}
+
+/* 深色主题下的标签输入框样式 */
+[data-theme="dark"] .label-input input {
   background-color: #ffffff !important;
   color: #333333;
   border-color: #404040;
