@@ -1,3 +1,12 @@
+.content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 40px;
+  display: flex;
+}
+
 .placeholder {
   position: absolute;
   top: 50%;
@@ -27,7 +36,7 @@
   padding: 0 10px;
   display: flex;
   align-items: center;
-  background-color: var(--background-color);
+  background-color: var(--footer-background);
   border-top: 1px solid var(--border-color);
   z-index: 2;
 }
@@ -49,7 +58,7 @@
   padding: 0 10px;
   border: 1px solid var(--border-color);
   border-radius: 4px;
-  background-color: var(--input-background);
+  background-color: #ffffff !important;
   color: var(--text-color);
   font-size: 14px;
 }
@@ -57,6 +66,7 @@
 .footer .right input:focus {
   outline: none;
   border-color: var(--primary-color);
+  background-color: #ffffff !important;
 }
 
 .footer .handle {
@@ -81,9 +91,15 @@
   background-color: var(--border-color);
 }
 
+/* 编辑器容器样式 */
+#inputEditor, #outputEditor {
+  height: 100% !important;
+}
+
 /* 深色主题变量 */
 [data-theme="dark"] {
   --background-color: #1e1e1e;
+  --footer-background: #252526;
   --border-color: #404040;
   --text-color: #d4d4d4;
   --text-color-secondary: #808080;
@@ -95,10 +111,18 @@
 /* 浅色主题变量 */
 [data-theme="light"] {
   --background-color: #ffffff;
+  --footer-background: #f5f5f5;
   --border-color: #e0e0e0;
   --text-color: #333333;
   --text-color-secondary: #666666;
-  --input-background: #f5f5f5;
+  --input-background: #ffffff;
   --primary-color: #0078d4;
   --hover-background: rgba(0, 0, 0, 0.04);
+}
+
+/* 深色主题下的输入框样式 */
+[data-theme="dark"] .footer .right input {
+  background-color: #ffffff !important;
+  color: #333333;
+  border-color: #404040;
 }

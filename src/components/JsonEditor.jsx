@@ -544,75 +544,80 @@ class JsonEditor extends Component {
     return (
       <StyledEngineProvider injectFirst>
         <ThemeProvider theme={currentTheme}>
-          <div className="content">
-            <div 
-              id="inputEditor"
-              style={{ width: jsFilter ? '50%' : '100%' }}
-            />
-            <div
-              id="outputEditor"
-              style={{ display: jsFilter ? 'block' : 'none' }}
-            />
-          </div>
-
-          {/* 显示占位符提示 */}
-          {placeholder && (
-            <div className="placeholder">
-              URL Params、XML、YAML 粘贴自动转为 JSON
-            </div>
-          )}
-
-          <div className="footer">
-            <div className="left">this</div>
-            
-            {/* JS过滤器输入框 */}
-            <div className="right">
-              <input
-                onChange={this.handleJsFilterInputChange}
-                placeholder=' JS 过滤; 示例 ".key.subkey"、"[0][1]"、".map(x=>x.val)"'
-                value={jsFilter}
-                type="text"
+          <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
+            <div className="content">
+              <div 
+                id="inputEditor"
+                style={{ width: jsFilter ? '50%' : '100%' }}
+              />
+              <div
+                id="outputEditor"
+                style={{ 
+                  width: jsFilter ? '50%' : '0',
+                  display: jsFilter ? 'block' : 'none'
+                }}
               />
             </div>
 
-            {/* 工具按钮区域 */}
-            <div className="handle">
-              <Tooltip title="重新格式化「Alt + F」" placement="top">
-                <Button onClick={this.handleReFormat} size="small">
-                  <FormatIcon />
-                </Button>
-              </Tooltip>
+            {/* 显示占位符提示 */}
+            {placeholder && (
+              <div className="placeholder">
+                URL Params、XML、YAML 粘贴自动转为 JSON
+              </div>
+            )}
 
-              <Tooltip title="全部展开「Alt + . + Shift」" placement="top">
-                <Button onClick={this.handleExpandAll} size="small">
-                  <ExpandIcon />
-                </Button>
-              </Tooltip>
+            <div className="footer">
+              <div className="left">this</div>
+              
+              {/* JS过滤器输入框 */}
+              <div className="right">
+                <input
+                  onChange={this.handleJsFilterInputChange}
+                  placeholder=' JS 过滤; 示例 ".key.subkey"、"[0][1]"、".map(x=>x.val)"'
+                  value={jsFilter}
+                  type="text"
+                />
+              </div>
 
-              <Tooltip title="全部折叠「Alt + .」" placement="top">
-                <Button onClick={this.handleCollapseAll} size="small">
-                  <CollapseIcon />
-                </Button>
-              </Tooltip>
+              {/* 工具按钮区域 */}
+              <div className="handle">
+                <Tooltip title="重新格式化「Alt + F」" placement="top">
+                  <Button onClick={this.handleReFormat} size="small">
+                    <FormatIcon />
+                  </Button>
+                </Tooltip>
 
-              <Divider orientation="vertical" flexItem />
+                <Tooltip title="全部展开「Alt + . + Shift」" placement="top">
+                  <Button onClick={this.handleExpandAll} size="small">
+                    <ExpandIcon />
+                  </Button>
+                </Tooltip>
 
-              <Tooltip title="压缩复制「Alt + C」" placement="top">
-                <Button onClick={this.handleCompressCopy} size="small">
-                  <CompressIcon />
-                </Button>
-              </Tooltip>
+                <Tooltip title="全部折叠「Alt + .」" placement="top">
+                  <Button onClick={this.handleCollapseAll} size="small">
+                    <CollapseIcon />
+                  </Button>
+                </Tooltip>
 
-              <Tooltip title="压缩引号复制「Alt + \」" placement="top">
-                <Button onClick={this.handleCompressQuoteCopy} size="small">
-                  <EscapeIcon />
-                </Button>
-              </Tooltip>
+                <Divider orientation="vertical" flexItem />
+
+                <Tooltip title="压缩复制「Alt + C」" placement="top">
+                  <Button onClick={this.handleCompressCopy} size="small">
+                    <CompressIcon />
+                  </Button>
+                </Tooltip>
+
+                <Tooltip title="压缩引号复制「Alt + \」" placement="top">
+                  <Button onClick={this.handleCompressQuoteCopy} size="small">
+                    <EscapeIcon />
+                  </Button>
+                </Tooltip>
+              </div>
             </div>
-          </div>
 
-          {/* 消息提示组件 */}
-          <MessageSnackbar messageData={messageData} />
+            {/* 消息提示组件 */}
+            <MessageSnackbar messageData={messageData} />
+          </div>
         </ThemeProvider>
       </StyledEngineProvider>
     )
