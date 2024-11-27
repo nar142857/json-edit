@@ -160,3 +160,9 @@
 │   └── index.js         # 入口文件
 ├── package.json         # 项目配置文件
 └── webpack.config.js    # Webpack 配置文件
+
+# 插件截图
+![alt text](image.png)
+![alt text](image-1.png)
+![alt text](image-2.png)
+![alt text](image-3.png)
