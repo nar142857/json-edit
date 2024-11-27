@@ -338,6 +338,9 @@ class JsonEditor extends Component {
     try {
       const currentContent = this.inputEditor.getValue()
       
+      // 根据编辑器内容设置 placeholder 状态
+      this.setState({ placeholder: !currentContent.trim() })
+      
       // 更新输出编辑器
       if (this.state.jsFilter) {
         this.updateOutputWithFilter(currentContent)
@@ -861,7 +864,7 @@ class JsonEditor extends Component {
         this.inputContentObject = null
         this.setEditorFormatValue(window.services.readFileContent(payload[0].path))
       } else {
-        const hasContent = this.inputEditor && this.inputEditor.getValue()
+        const hasContent = this.inputEditor && this.inputEditor.getValue().trim()
         this.setState({ placeholder: !hasContent })
       }
       this.inputEditor.focus()
