@@ -30,7 +30,8 @@ import {
   Save as SaveIcon,
   Folder as FolderIcon,
   InsertDriveFile as FileIcon,
-  History as HistoryIcon
+  History as HistoryIcon,
+  CompareArrows as CompareIcon
 } from '@mui/icons-material'
 import { JsonService, FileService, EditorStateService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
@@ -88,12 +89,14 @@ class JsonEditor extends Component {
       lastSavedContent: '', // 添加最后保存的内容状态
       isEditorReady: false, // 添加编辑器准备状态
       loading: false, // 添加加载状态
-      error: null
+      error: null,
+      isCompareMode: false
     }
 
     // 编辑器实例
     this.inputEditor = null  // 输入编辑器
     this.outputEditor = null // 输出编辑器
+    this.diffEditor = null  // diff编辑器实例
     
     // 存储输入的JSON对象
     this.inputContentObject = null
@@ -135,57 +138,70 @@ class JsonEditor extends Component {
   }
 
   componentDidMount() {
-    // 创建输入编辑器
-    this.inputEditor = monaco.editor.create(document.getElementById('inputEditor'), {
-      value: '',
-      language: 'json',
-      theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
-      formatOnPaste: true,
-      formatOnType: true,
-      automaticLayout: true,
-      minimap: { enabled: false },
-      contextmenu: true,
-      scrollBeyondLastLine: false,
-      folding: true,
-      foldingStrategy: 'auto',
-      foldingHighlight: true,
-      foldingImportsByDefault: true,
-      unfoldOnClickAfterEndOfLine: true,
-      showFoldingControls: 'always',
-      links: false,
-      lineNumbers: 'on',
-      renderValidationDecorations: 'on',
-      wordWrap: 'on',
-      fontSize: 14,
-      tabSize: 2
-    })
+    // 等待 DOM 准备完成
+    requestAnimationFrame(() => {
+      // 创建输入编辑器
+      this.inputEditor = monaco.editor.create(document.getElementById('inputEditor'), {
+        value: '',
+        language: 'json',
+        theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
+        formatOnPaste: true,
+        formatOnType: true,
+        automaticLayout: true,
+        minimap: { enabled: false },
+        contextmenu: true,
+        scrollBeyondLastLine: false,
+        folding: true,
+        foldingStrategy: 'auto',
+        foldingHighlight: true,
+        foldingImportsByDefault: true,
+        unfoldOnClickAfterEndOfLine: true,
+        showFoldingControls: 'always',
+        links: false,
+        lineNumbers: 'on',
+        renderValidationDecorations: 'on',
+        wordWrap: 'on',
+        fontSize: 14,
+        tabSize: 2
+      })
 
-    // 创建输出编辑器
-    this.outputEditor = monaco.editor.create(document.getElementById('outputEditor'), {
-      value: '',
-      language: 'json',
-      theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
-      readOnly: true,
-      automaticLayout: true,
-      minimap: { enabled: false },
-      contextmenu: true,
-      scrollBeyondLastLine: false,
-      folding: true,
-      foldingStrategy: 'auto',
-      foldingHighlight: true,
-      foldingImportsByDefault: true,
-      unfoldOnClickAfterEndOfLine: true,
-      showFoldingControls: 'always',
-      links: false,
-      lineNumbers: 'on',
-      renderValidationDecorations: 'on',
-      wordWrap: 'on',
-      fontSize: 14,
-      tabSize: 2
-    })
+      // 创建输出编辑器
+      this.outputEditor = monaco.editor.create(document.getElementById('outputEditor'), {
+        value: '',
+        language: 'json',
+        theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
+        readOnly: true,
+        automaticLayout: true,
+        minimap: { enabled: false },
+        contextmenu: true,
+        scrollBeyondLastLine: false,
+        folding: true,
+        foldingStrategy: 'auto',
+        foldingHighlight: true,
+        foldingImportsByDefault: true,
+        unfoldOnClickAfterEndOfLine: true,
+        showFoldingControls: 'always',
+        links: false,
+        lineNumbers: 'on',
+        renderValidationDecorations: 'on',
+        wordWrap: 'on',
+        fontSize: 14,
+        tabSize: 2
+      })
 
-    // 初始化编辑器
-    this.initializeEditor()
+      // 预先创建 diff 编辑器
+      this.diffEditor = monaco.editor.createDiffEditor(document.getElementById('diffEditor'), {
+        theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
+        readOnly: false,
+        automaticLayout: true,
+        minimap: { enabled: false },
+        renderSideBySide: true,
+        originalEditable: true
+      })
+
+      // 初始化编辑器
+      this.initializeEditor()
+    })
 
     // 监听主题变化
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
@@ -230,6 +246,9 @@ class JsonEditor extends Component {
     }
     if (this.outputEditor) {
       this.outputEditor.dispose()
+    }
+    if (this.diffEditor) {
+      this.diffEditor.dispose()
     }
 
     window.removeEventListener('keydown', this.handleKeyDown, true)
@@ -488,7 +507,7 @@ class JsonEditor extends Component {
           // 获取完整匹配和捕获组
           const fullMatch = match[0]
           const prefix = fullMatch.includes(':') ? fullMatch.split(':')[0] + ': ' : ''
-          const jsonStr = match[1] || match[2] // 第一个捕获组是带前缀的，第二个是独立的JSON
+          const jsonStr = match[1] || match[2] // 第一个捕获组是带前缀的，二个是独立的JSON
           
           // 尝试解析并格式化 JSON
           const formattedJson = JSON.stringify(JSON.parse(jsonStr), null, 2)
@@ -579,7 +598,7 @@ class JsonEditor extends Component {
           
           lastIndex = match.index + fullMatch.length
         } catch (e) {
-          // 如果解��失败，保持原样
+          // 如果解析失败，保持原样
           result += value.slice(lastIndex, match.index + match[0].length)
           lastIndex = match.index + match[0].length
         }
@@ -1000,13 +1019,36 @@ class JsonEditor extends Component {
   }
 
   /**
+   * 处理对比按钮点击
+   */
+  handleCompareClick = () => {
+    this.setState(prevState => ({
+      isCompareMode: !prevState.isCompareMode
+    }), () => {
+      if (this.state.isCompareMode) {
+        // 设置初始内容
+        const originalModel = monaco.editor.createModel('', 'json')
+        const modifiedModel = monaco.editor.createModel(this.inputEditor.getValue(), 'json')
+        this.diffEditor.setModel({
+          original: originalModel,
+          modified: modifiedModel
+        })
+      } else {
+        // 清除 diff 编辑器的模型
+        this.diffEditor.setModel(null)
+      }
+    })
+  }
+
+  /**
    * 渲染组件
    * @returns {JSX.Element} 渲染的React组件
    */
   render() {
     const { 
       theme, jsFilter, placeholder, messageData, showLabelInput, label, 
-      fileMenuAnchor, jsonFiles, historyMenuAnchor, history, loading, error 
+      fileMenuAnchor, jsonFiles, historyMenuAnchor, history, loading, error,
+      isCompareMode
     } = this.state
     const currentTheme = theme === 'dark' ? darkTheme : lightTheme
 
@@ -1044,13 +1086,27 @@ class JsonEditor extends Component {
               <div className="editor-container">
                 <div 
                   id="inputEditor"
-                  style={{ width: jsFilter ? '50%' : '100%' }}
+                  className="monaco-editor"
+                  style={{ 
+                    width: jsFilter ? '50%' : '100%',
+                    display: isCompareMode ? 'none' : 'block'
+                  }}
                 />
                 <div
                   id="outputEditor"
+                  className="monaco-editor"
                   style={{ 
-                    width: jsFilter ? '50%' : '0',
-                    display: jsFilter ? 'block' : 'none'
+                    width: '50%',
+                    display: isCompareMode ? 'none' : jsFilter ? 'block' : 'none'
+                  }}
+                />
+                <div
+                  id="diffEditor"
+                  className="monaco-editor"
+                  style={{ 
+                    width: '100%', 
+                    height: '100%',
+                    display: isCompareMode ? 'block' : 'none'
                   }}
                 />
               </div>
@@ -1178,6 +1234,12 @@ class JsonEditor extends Component {
                 <Tooltip title="保存文件「Ctrl/⌘ + S」" placement="top">
                   <Button onClick={this.handleSaveFile} size="small">
                     <SaveIcon />
+                  </Button>
+                </Tooltip>
+
+                <Tooltip title="对比 JSON" placement="top">
+                  <Button onClick={this.handleCompareClick} size="small">
+                    <CompareIcon />
                   </Button>
                 </Tooltip>
               </div>
