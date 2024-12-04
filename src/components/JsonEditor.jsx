@@ -103,6 +103,9 @@ class JsonEditor extends Component {
     this.autoSaveTimer = null
     this.needsSave = false
 
+    // 初始化标签输入框的ref
+    this.labelInputRef = React.createRef()
+
     // 使用 lodash 的 debounce 优化自动保存
     this.autoSave = debounce(() => {
       if (this.needsSave) {
@@ -549,7 +552,7 @@ class JsonEditor extends Component {
         // 不是完整的 JSON，继续下面的处理
       }
 
-      // 匹配所有可能��� JSON 内容
+      // 匹配所有可能的 JSON 内容
       // 1. body: {...} 格式
       // 2. headers: {...} 格式
       // 3. 独立的 {...} 或 [...] 格式
@@ -576,7 +579,7 @@ class JsonEditor extends Component {
           
           lastIndex = match.index + fullMatch.length
         } catch (e) {
-          // 如果解析失败，保持原样
+          // 如果解��失败，保持原样
           result += value.slice(lastIndex, match.index + match[0].length)
           lastIndex = match.index + match[0].length
         }
@@ -659,7 +662,11 @@ class JsonEditor extends Component {
   handleLabelClick = () => {
     this.setState(prevState => ({
       showLabelInput: !prevState.showLabelInput
-    }))
+    }), () => {
+      if (this.state.showLabelInput && this.labelInputRef.current) {
+        this.labelInputRef.current.focus()
+      }
+    })
   }
 
   /**
@@ -899,7 +906,7 @@ class JsonEditor extends Component {
     // Ctrl/Command + T: 切换标签输入框显示状态
     if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 't') {
       e.preventDefault()
-      this.setState(prevState => ({ showLabelInput: !prevState.showLabelInput }))
+      this.handleLabelClick()
       return
     }
 
@@ -1023,6 +1030,7 @@ class JsonEditor extends Component {
               {showLabelInput && (
                 <div className="label-input">
                   <input
+                    ref={this.labelInputRef}
                     value={label}
                     onChange={this.handleLabelChange}
                     placeholder="输入标签描述..."

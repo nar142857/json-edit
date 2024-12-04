@@ -36,15 +36,18 @@
 - 使用 Ctrl/Command + T 快速切换标签输入框
 - 按 Enter 或 Escape 关闭标签输入框
 - 标签信息会随内容自动保存到历史记录
+- 打开标签输入框时自动聚焦
+
 
 ### 自动保存
 - 编辑器内容变化时自动保存
 - 插件关闭时自动保存
 - 空内容或重复内容不会保存
 - 保存时自动包含标签信息
+- 使用 debounce 优化保存性能
+
 
 ## 使用方法
-
 1. JSON格式化:
    - 复制JSON文本,呼出uTools,输入"json"
    - 或直接拖拽JSON文件到输入框
@@ -166,3 +169,4 @@
 ![alt text](image-1.png)
 ![alt text](image-2.png)
 ![alt text](image-3.png)
+
