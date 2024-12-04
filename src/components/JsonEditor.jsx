@@ -35,6 +35,7 @@ import {
 import { JsonService, FileService, EditorStateService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
 import './JsonEditor.css'
+import { debounce } from 'lodash'
 
 // 创建暗色主题
 const darkTheme = createTheme({
@@ -85,7 +86,9 @@ class JsonEditor extends Component {
       historyMenuAnchor: null,
       history: [],
       lastSavedContent: '', // 添加最后保存的内容状态
-      isEditorReady: false // 添加编辑器准备状态
+      isEditorReady: false, // 添加编辑器准备状态
+      loading: false, // 添加加载状态
+      error: null
     }
 
     // 编辑器实例
@@ -99,6 +102,13 @@ class JsonEditor extends Component {
     this.jsFilterInputDelayTimer = null
     this.autoSaveTimer = null
     this.needsSave = false
+
+    // 使用 lodash 的 debounce 优化自动保存
+    this.autoSave = debounce(() => {
+      if (this.needsSave) {
+        this.saveEditorState()
+      }
+    }, 1000)
   }
 
   /**
@@ -206,6 +216,9 @@ class JsonEditor extends Component {
     if (this.autoSaveTimer) {
       clearInterval(this.autoSaveTimer)
     }
+    if (this.autoSave) {
+      this.autoSave.cancel()
+    }
     window.removeEventListener('beforeunload', this.handleBeforeUnload)
 
     // 销毁编辑器实例
@@ -247,10 +260,8 @@ class JsonEditor extends Component {
       clearInterval(this.autoSaveTimer)
     }
     this.autoSaveTimer = setInterval(() => {
-      if (this.state.isEditorReady && this.needsSave) {
-        this.saveEditorState()
-      }
-    }, 30000) // 每30秒保存一次
+      this.autoSave()
+    }, 30000)
   }
 
   /**
@@ -538,7 +549,7 @@ class JsonEditor extends Component {
         // 不是完整的 JSON，继续下面的处理
       }
 
-      // 匹配所有可能的 JSON 内容
+      // 匹配所有可能��� JSON 内容
       // 1. body: {...} 格式
       // 2. headers: {...} 格式
       // 3. 独立的 {...} 或 [...] 格式
@@ -988,9 +999,21 @@ class JsonEditor extends Component {
   render() {
     const { 
       theme, jsFilter, placeholder, messageData, showLabelInput, label, 
-      fileMenuAnchor, jsonFiles, historyMenuAnchor, history 
+      fileMenuAnchor, jsonFiles, historyMenuAnchor, history, loading, error 
     } = this.state
     const currentTheme = theme === 'dark' ? darkTheme : lightTheme
+
+    // 如果有错误，显示错误信息
+    if (error) {
+      return (
+        <div className="error-boundary">
+          <h2>Something went wrong.</h2>
+          <details style={{ whiteSpace: 'pre-wrap' }}>
+            {error.toString()}
+          </details>
+        </div>
+      )
+    }
 
     return (
       <StyledEngineProvider injectFirst>
@@ -1157,6 +1180,18 @@ class JsonEditor extends Component {
         </ThemeProvider>
       </StyledEngineProvider>
     )
+  }
+
+  // 添加错误处理方法
+  componentDidCatch(error, errorInfo) {
+    this.setState({
+      error: error,
+      messageData: { 
+        type: 'error', 
+        message: `发生错误: ${error.message}` 
+      }
+    })
+    console.error('Error:', error, errorInfo)
   }
 }
 
