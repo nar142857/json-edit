@@ -1,7 +1,7 @@
 /**
  * 导入所需的React和其他依赖
  */
-import React, { Component } from 'react'
+import React, { Component, useState } from 'react'
 import * as monaco from 'monaco-editor'
 import { 
   Button, 
@@ -37,6 +37,7 @@ import { JsonService, FileService, EditorStateService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
 import './JsonEditor.css'
 import { debounce } from 'lodash'
+import DiffEditor from './DiffEditor'
 
 // 创建暗色主题
 const darkTheme = createTheme({
@@ -70,6 +71,9 @@ class JsonEditor extends Component {
   constructor(props) {
     super(props)
     
+    // 初始化 ref
+    this.editorRef = React.createRef();
+    
     // 初始化状态
     this.state = {
       // 主题状态,根据系统主题自动切换
@@ -87,35 +91,257 @@ class JsonEditor extends Component {
       historyMenuAnchor: null,
       history: [],
       lastSavedContent: '', // 添加最后保存的内容状态
-      isEditorReady: false, // 添加编辑器准备状态
+      isEditorMounted: false, // 添加编辑器准备状态
       loading: false, // 添加加载状态
       error: null,
-      isCompareMode: false
+      isDiffMode: false,
+      originalValue: '',
+      modifiedValue: ''
     }
 
     // 编辑器实例
-    this.inputEditor = null  // 输入编辑器
-    this.outputEditor = null // 输出编辑器
-    this.diffEditor = null  // diff编辑器实例
+    this.inputEditor = null;
     
     // 存储输入的JSON对象
-    this.inputContentObject = null
+    this.inputContentObject = null;
     
     // JS过滤器延时处理定时器
-    this.jsFilterInputDelayTimer = null
-    this.autoSaveTimer = null
-    this.needsSave = false
+    this.jsFilterInputDelayTimer = null;
+    this.autoSaveTimer = null;
+    this.needsSave = false;
 
     // 初始化标签输入框的ref
-    this.labelInputRef = React.createRef()
+    this.labelInputRef = React.createRef();
 
     // 使用 lodash 的 debounce 优化自动保存
     this.autoSave = debounce(() => {
       if (this.needsSave) {
-        this.saveEditorState()
+        this.saveEditorState();
       }
-    }, 1000)
+    }, 1000);
+
+    // 绑定方法到实例
+    this.listenPaste = this.listenPaste.bind(this);
+    this.handleKeyDown = this.handleKeyDown.bind(this);
   }
+
+  /**
+   * 初始化 Monaco Editor
+   */
+  initMonacoEditor = () => {
+    const { theme } = this.state;
+    
+    if (!this.editorRef.current) {
+      console.warn('Editor element not ready for initialization');
+      return;
+    }
+
+    try {
+      // 如果已经有编辑器实例，先销毁
+      if (this.inputEditor) {
+        this.inputEditor.dispose();
+        this.inputEditor = null;
+      }
+
+      // 基础编辑器配置
+      const editorConfig = {
+        value: '',
+        language: 'json',
+        theme: theme === 'dark' ? 'vs-dark' : 'vs-light',
+        automaticLayout: true,
+        minimap: { enabled: false },
+        lineNumbers: 'on',
+        folding: true,
+        formatOnPaste: true,
+        formatOnType: true,
+        scrollBeyondLastLine: false,
+        wordWrap: 'on',
+        fontSize: 14,
+        tabSize: 2
+      };
+
+      // 创建编辑器实例
+      this.inputEditor = monaco.editor.create(this.editorRef.current, editorConfig);
+
+      // 添加内容变化监听器
+      if (this.inputEditor) {
+        // 使用箭头函数来保持正确的 this 绑定
+        this.inputEditor.onDidChangeModelContent((e) => {
+          this.handleEditorChange(e);
+        });
+        
+        this.setState({ isEditorMounted: true });
+      }
+    } catch (error) {
+      console.error('Error initializing editor:', error);
+    }
+  };
+
+  /**
+   * 处理编辑器内容变化
+   */
+  handleEditorChange = (e) => {
+    try {
+      const content = this.inputEditor.getValue();
+      
+      // 如果内容发生变化，标记需要保存
+      this.needsSave = true;
+      
+      // 触发自动保存
+      this.autoSave();
+      
+      // 如果有 JS 过滤器，更新过滤后的内容
+      if (this.state.jsFilter) {
+        this.handleJsFilter(content);
+      }
+    } catch (error) {
+      console.error('Error handling editor change:', error);
+    }
+  };
+
+  /**
+   * 组件挂载后初始化编辑器
+   */
+  componentDidMount() {
+    // 使用 requestAnimationFrame 确保 DOM 已经准备好
+    requestAnimationFrame(() => {
+      if (this.editorRef.current) {
+        this.initMonacoEditor();
+        // 在编辑器初始化后添加事件监听
+        this.listenPaste();
+        window.addEventListener('keydown', this.handleKeyDown);
+        this.listenPluginEnter();
+      }
+    });
+  }
+
+  /**
+   * 组件更新后检查是否需要初始化编辑器
+   */
+  componentDidUpdate(prevProps, prevState) {
+    if (!this.state.isEditorMounted && this.editorRef.current) {
+      this.initMonacoEditor();
+      this.listenPaste();
+    }
+  }
+
+  /**
+   * 组件卸载前清理资源
+   */
+  componentWillUnmount() {
+    // 移除事件监听器
+    window.removeEventListener('keydown', this.handleKeyDown);
+    
+    // 清理编辑器实例
+    if (this.inputEditor) {
+      try {
+        this.inputEditor.dispose();
+        this.inputEditor = null;
+      } catch (error) {
+        console.error('Error disposing editor:', error);
+      }
+    }
+
+    // 重置状态
+    this.setState({ isEditorMounted: false });
+  }
+
+  /**
+   * 监听粘贴事件
+   */
+  listenPaste = () => {
+    if (!this.editorRef.current) {
+      console.warn('Editor element not ready for paste listener');
+      return;
+    }
+
+    const pasteHandler = (e) => {
+      const text = e.clipboardData.getData('text');
+      if (!text || !this.inputEditor) return;
+
+      // 编辑器为空时的处理
+      if (!this.inputEditor.getValue()) {
+        e.stopPropagation();
+        e.preventDefault();
+        this.inputEditor.setValue(text);
+        // 使用 requestAnimationFrame 确保在下一帧执行格式化
+        requestAnimationFrame(() => this.handleReFormat());
+        return;
+      }
+
+      // 检查是否全选状态
+      const selection = this.inputEditor.getSelection();
+      if (
+        selection.startLineNumber === 1 && 
+        selection.startColumn === 1 &&
+        (
+          selection.startLineNumber !== selection.endLineNumber ||
+          selection.startColumn !== selection.endColumn
+        )
+      ) {
+        const model = this.inputEditor.getModel();
+        const lastLine = model.getLineCount();
+        const lastColumn = model.getLineContent(lastLine).length + 1;
+        
+        // 全选态下的粘贴处理
+        if (
+          selection.endLineNumber === lastLine && 
+          selection.endColumn === lastColumn
+        ) {
+          e.stopPropagation();
+          e.preventDefault();
+          this.inputEditor.setValue(text);
+          // 使用 requestAnimationFrame 确保在下一帧执行格式化
+          requestAnimationFrame(() => this.handleReFormat());
+        }
+      }
+    };
+
+    // 添加粘贴事件监听器
+    this.editorRef.current.addEventListener('paste', pasteHandler, true);
+    
+    // 保存 handler 引用以便后续移除
+    this.pasteHandler = pasteHandler;
+  };
+
+  /**
+   * 切换差异对比模式
+   */
+  toggleDiffMode = () => {
+    const { isDiffMode } = this.state;
+    if (!isDiffMode) {
+      // 进入对比模式时，将当前内容设为原始内容
+      const currentValue = this.inputEditor?.getValue() || '';
+      this.setState({
+        isDiffMode: true,
+        originalValue: currentValue,
+        modifiedValue: currentValue
+      });
+    } else {
+      // 退出对比模式时，使用修改后的内容更新编辑器
+      const { modifiedValue } = this.state;
+      
+      // 先更新状态
+      this.setState({
+        isDiffMode: false,
+        originalValue: '',
+        modifiedValue: ''
+      }, () => {
+        // 在状态更新后重新初始化编辑器
+        if (this.editorRef.current) {
+          this.initMonacoEditor();
+          // 设置编辑器内容
+          if (this.inputEditor) {
+            this.inputEditor.setValue(modifiedValue);
+            // 确保编辑器获得焦点
+            requestAnimationFrame(() => {
+              this.inputEditor.focus();
+            });
+          }
+        }
+      });
+    }
+  };
 
   /**
    * 初始化编辑器
@@ -135,123 +361,6 @@ class JsonEditor extends Component {
     window.addEventListener('beforeunload', this.handleBeforeUnload)
 
     this.setState({ isEditorReady: true })
-  }
-
-  componentDidMount() {
-    // 等待 DOM 准备完成
-    requestAnimationFrame(() => {
-      // 创建输入编辑器
-      this.inputEditor = monaco.editor.create(document.getElementById('inputEditor'), {
-        value: '',
-        language: 'json',
-        theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
-        formatOnPaste: true,
-        formatOnType: true,
-        automaticLayout: true,
-        minimap: { enabled: false },
-        contextmenu: true,
-        scrollBeyondLastLine: false,
-        folding: true,
-        foldingStrategy: 'auto',
-        foldingHighlight: true,
-        foldingImportsByDefault: true,
-        unfoldOnClickAfterEndOfLine: true,
-        showFoldingControls: 'always',
-        links: false,
-        lineNumbers: 'on',
-        renderValidationDecorations: 'on',
-        wordWrap: 'on',
-        fontSize: 14,
-        tabSize: 2
-      })
-
-      // 创建输出编辑器
-      this.outputEditor = monaco.editor.create(document.getElementById('outputEditor'), {
-        value: '',
-        language: 'json',
-        theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
-        readOnly: true,
-        automaticLayout: true,
-        minimap: { enabled: false },
-        contextmenu: true,
-        scrollBeyondLastLine: false,
-        folding: true,
-        foldingStrategy: 'auto',
-        foldingHighlight: true,
-        foldingImportsByDefault: true,
-        unfoldOnClickAfterEndOfLine: true,
-        showFoldingControls: 'always',
-        links: false,
-        lineNumbers: 'on',
-        renderValidationDecorations: 'on',
-        wordWrap: 'on',
-        fontSize: 14,
-        tabSize: 2
-      })
-
-      // 预先创建 diff 编辑器
-      this.diffEditor = monaco.editor.createDiffEditor(document.getElementById('diffEditor'), {
-        theme: this.state.theme === 'dark' ? 'vs-dark' : 'vs',
-        readOnly: false,
-        automaticLayout: true,
-        minimap: { enabled: false },
-        renderSideBySide: true,
-        originalEditable: true
-      })
-
-      // 初始化编辑器
-      this.initializeEditor()
-    })
-
-    // 监听主题变化
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      const newTheme = e.matches ? 'dark' : 'light'
-      this.setState({ theme: newTheme })
-      this.updateEditorTheme(newTheme)
-    })
-
-    // 监听粘贴事件
-    this.listenPaste()
-
-    // 监听插件进入
-    this.listenPluginEnter()
-
-    // 监听插件退出
-    window.utools.onPluginOut(() => {
-      this.saveEditorState()
-    })
-
-    // 监听键盘快捷键
-    window.addEventListener('keydown', this.handleKeyDown, true)
-  }
-
-  componentWillUnmount() {
-    // 组件卸载前保存
-    if (this.needsSave) {
-      this.saveEditorState()
-    }
-
-    // 清理定时器和事件监听
-    if (this.autoSaveTimer) {
-      clearInterval(this.autoSaveTimer)
-    }
-    if (this.autoSave) {
-      this.autoSave.cancel()
-    }
-    window.removeEventListener('beforeunload', this.handleBeforeUnload)
-
-    // 销毁编辑器实例
-    if (this.inputEditor) {
-      this.inputEditor.dispose()
-    }
-    if (this.outputEditor) {
-      this.outputEditor.dispose()
-    }
-    if (this.diffEditor) {
-      this.diffEditor.dispose()
-    }
-
-    window.removeEventListener('keydown', this.handleKeyDown, true)
   }
 
   /**
@@ -303,7 +412,7 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 处理窗口关闭前的保存
+   * 处理窗口关闭前保存
    */
   handleBeforeUnload = () => {
     if (this.needsSave) {
@@ -583,7 +692,7 @@ class JsonEditor extends Component {
       let match
       while ((match = jsonRegex.exec(value)) !== null) {
         try {
-          // 获取完整匹配和捕获组
+          // 取完整匹配捕获组
           const fullMatch = match[0]
           const prefix = fullMatch.includes(':') ? fullMatch.split(':')[0] + ': ' : ''
           const jsonStr = match[1] || match[2] // 第一个捕获组是带前缀的，第二个是独立的JSON
@@ -621,7 +730,7 @@ class JsonEditor extends Component {
       const editor = this.state.jsFilter ? this.outputEditor : this.inputEditor
       if (!editor) return
 
-      // 使用编辑器内置命令
+      // 用编辑器内置命令
       editor.trigger('fold', 'editor.unfoldAll', null)
       editor.focus()
     } catch (e) {
@@ -758,7 +867,7 @@ class JsonEditor extends Component {
         contentToSave = content
       }
 
-      // 使用 window.services 保存文件
+      // 使用 window.services 保存件
       await window.services.writeFile(filePath, contentToSave)
       this.setState({ 
         messageData: { 
@@ -844,22 +953,27 @@ class JsonEditor extends Component {
    * 监听粘贴事件
    */
   listenPaste = () => {
-    document.querySelector('#inputEditor').addEventListener('paste', e => {
-      const text = e.clipboardData.getData('text')
-      if (!text) return
+    if (!this.editorRef.current) {
+      console.warn('Editor element not ready for paste listener');
+      return;
+    }
+
+    this.editorRef.current.addEventListener('paste', e => {
+      const text = e.clipboardData.getData('text');
+      if (!text || !this.inputEditor) return;
 
       // 编辑器为空时的处理
       if (!this.inputEditor.getValue()) {
-        e.stopPropagation()
-        e.preventDefault()
-        this.inputEditor.setValue(text)
+        e.stopPropagation();
+        e.preventDefault();
+        this.inputEditor.setValue(text);
         // 使用 requestAnimationFrame 确保在下一帧执行格式化
-        requestAnimationFrame(() => this.handleReFormat())
-        return
+        requestAnimationFrame(() => this.handleReFormat());
+        return;
       }
 
       // 检查是否全选状态
-      const selection = this.inputEditor.getSelection()
+      const selection = this.inputEditor.getSelection();
       if (
         selection.startLineNumber === 1 && 
         selection.startColumn === 1 &&
@@ -868,24 +982,24 @@ class JsonEditor extends Component {
           selection.startColumn !== selection.endColumn
         )
       ) {
-        const model = this.inputEditor.getModel()
-        const lastLine = model.getLineCount()
-        const lastColumn = model.getLineContent(lastLine).length + 1
+        const model = this.inputEditor.getModel();
+        const lastLine = model.getLineCount();
+        const lastColumn = model.getLineContent(lastLine).length + 1;
         
         // 全选态下的粘贴处理
         if (
           selection.endLineNumber === lastLine && 
           selection.endColumn === lastColumn
         ) {
-          e.stopPropagation()
-          e.preventDefault() 
-          this.inputEditor.setValue(text)
+          e.stopPropagation();
+          e.preventDefault();
+          this.inputEditor.setValue(text);
           // 使用 requestAnimationFrame 确保在下一帧执行格式化
-          requestAnimationFrame(() => this.handleReFormat())
+          requestAnimationFrame(() => this.handleReFormat());
         }
       }
-    }, true)
-  }
+    }, true);
+  };
 
   /**
    * 监听插件进入事件
@@ -1019,25 +1133,17 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 处理对比按钮点击
+   * 处理差异编辑器原始内容变化
    */
-  handleCompareClick = () => {
-    this.setState(prevState => ({
-      isCompareMode: !prevState.isCompareMode
-    }), () => {
-      if (this.state.isCompareMode) {
-        // 设置初始内容
-        const originalModel = monaco.editor.createModel('', 'json')
-        const modifiedModel = monaco.editor.createModel(this.inputEditor.getValue(), 'json')
-        this.diffEditor.setModel({
-          original: originalModel,
-          modified: modifiedModel
-        })
-      } else {
-        // 清除 diff 编辑器的模型
-        this.diffEditor.setModel(null)
-      }
-    })
+  handleDiffEditorOriginalChange = (newValue) => {
+    this.setState({ originalValue: newValue });
+  }
+
+  /**
+   * 处理差异编辑器修改内容变化
+   */
+  handleDiffEditorModifiedChange = (newValue) => {
+    this.setState({ modifiedValue: newValue });
   }
 
   /**
@@ -1048,7 +1154,7 @@ class JsonEditor extends Component {
     const { 
       theme, jsFilter, placeholder, messageData, showLabelInput, label, 
       fileMenuAnchor, jsonFiles, historyMenuAnchor, history, loading, error,
-      isCompareMode
+      isDiffMode, originalValue, modifiedValue
     } = this.state
     const currentTheme = theme === 'dark' ? darkTheme : lightTheme
 
@@ -1084,31 +1190,27 @@ class JsonEditor extends Component {
                 </div>
               )}
               <div className="editor-container">
-                <div 
-                  id="inputEditor"
-                  className="monaco-editor"
-                  style={{ 
-                    width: jsFilter ? '50%' : '100%',
-                    display: isCompareMode ? 'none' : 'block'
-                  }}
-                />
-                <div
-                  id="outputEditor"
-                  className="monaco-editor"
-                  style={{ 
-                    width: '50%',
-                    display: isCompareMode ? 'none' : jsFilter ? 'block' : 'none'
-                  }}
-                />
-                <div
-                  id="diffEditor"
-                  className="monaco-editor"
-                  style={{ 
-                    width: '100%', 
-                    height: '100%',
-                    display: isCompareMode ? 'block' : 'none'
-                  }}
-                />
+                {isDiffMode ? (
+                  <DiffEditor
+                    originalValue={originalValue}
+                    modifiedValue={modifiedValue}
+                    language="json"
+                    theme={theme === 'dark' ? 'vs-dark' : 'vs-light'}
+                    height="100%"
+                    onOriginalValueChange={this.handleDiffEditorOriginalChange}
+                    onModifiedValueChange={this.handleDiffEditorModifiedChange}
+                  />
+                ) : (
+                  <div 
+                    ref={this.editorRef}
+                    className="monaco-editor"
+                    style={{ 
+                      width: jsFilter ? '50%' : '100%',
+                      height: '100%',
+                      opacity: this.state.isEditorMounted ? 1 : 0
+                    }}
+                  />
+                )}
               </div>
             </div>
 
@@ -1124,7 +1226,7 @@ class JsonEditor extends Component {
               <div className="right">
                 <input
                   onChange={this.handleJsFilterInputChange}
-                  placeholder=' JS 过滤; 示例 ".key.subkey"、"[0][1]"、".map(x=>x.val)"'
+                  placeholder=' JS 过滤; 例 ".key.subkey"、"[0][1]"、".map(x=>x.val)"'
                   value={jsFilter}
                   type="text"
                 />
@@ -1237,8 +1339,11 @@ class JsonEditor extends Component {
                   </Button>
                 </Tooltip>
 
-                <Tooltip title="对比 JSON" placement="top">
-                  <Button onClick={this.handleCompareClick} size="small">
+                <Tooltip title={isDiffMode ? "退出对比" : "差异对比"} placement="top">
+                  <Button 
+                    onClick={this.toggleDiffMode}
+                    size="small"
+                  >
                     <CompareIcon />
                   </Button>
                 </Tooltip>
