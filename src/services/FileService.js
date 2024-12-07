@@ -5,9 +5,9 @@ class FileService {
 
   async saveFileToPath(buffer, filename, ext, fileType, title) {
     ext = Array.isArray(ext) ? ext : [ext]
-    const fullpath = this.utools.showSaveDialog({
+    const fullpath = window.utools.showSaveDialog({
       title,
-      defaultPath: this.utools.getPath('downloads') + '/' + filename,
+      defaultPath: window.utools.getPath('downloads') + '/' + filename,
       filters: [
         {
           extensions: ext,
@@ -21,13 +21,13 @@ class FileService {
       return
     }
 
-    await this.utools.writeFile(fullpath, buffer)
-    this.utools.shellShowItemInFolder(fullpath)
+    await window.services.writeFile(fullpath, buffer)
+    window.utools.shellShowItemInFolder(fullpath)
   }
 
   async readOpenFileText(ext, fileType, title) {
     ext = Array.isArray(ext) ? ext : [ext]
-    const paths = this.utools.showOpenDialog({
+    const paths = window.utools.showOpenDialog({
       title,
       properties: ['openFile'],
       buttonLabel: '导入',
@@ -44,7 +44,8 @@ class FileService {
     }
 
     try {
-      const text = await this.utools.readFile(paths[0], { encoding: 'utf-8' })
+      // 使用 preload.js 中的文件读取方法
+      const text = await window.services.readFile(paths[0])
       return {
         text,
         path: paths[0],

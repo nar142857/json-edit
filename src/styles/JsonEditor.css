@@ -1,0 +1,90 @@
+/* 编辑器滚动条样式 */
+.monaco-editor .monaco-scrollable-element > .scrollbar > .slider {
+  background: rgba(121, 121, 121, 0.4) !important;
+  width: 8px !important;
+  border-radius: 4px !important;
+}
+
+.monaco-editor .monaco-scrollable-element > .scrollbar {
+  width: 8px !important;
+}
+
+/* 隐藏水平滚动条 */
+.monaco-editor .monaco-scrollable-element > .scrollbar.horizontal {
+  display: none !important;
+}
+
+/* 滚动条轨道 */
+.monaco-editor .monaco-scrollable-element > .scrollbar > .slider-background {
+  opacity: 0 !important;
+}
+
+/* 鼠标悬停时的滚动条样式 */
+.monaco-editor .monaco-scrollable-element:hover > .scrollbar > .slider {
+  background: rgba(100, 100, 100, 0.7) !important;
+}
+
+/* 差异编辑器滚动条样式 */
+.monaco-diff-editor .monaco-scrollable-element > .scrollbar > .slider {
+  background: rgba(121, 121, 121, 0.4) !important;
+  width: 8px !important;
+  border-radius: 4px !important;
+}
+
+.monaco-diff-editor .monaco-scrollable-element > .scrollbar {
+  width: 8px !important;
+}
+
+/* 差异编辑器水平滚动条 */
+.monaco-diff-editor .monaco-scrollable-element > .scrollbar.horizontal {
+  display: none !important;
+}
+
+/* 差异编辑器滚动条轨道 */
+.monaco-diff-editor .monaco-scrollable-element > .scrollbar > .slider-background {
+  opacity: 0 !important;
+}
+
+/* 差异编辑器鼠标悬停时的滚动条样式 */
+.monaco-diff-editor .monaco-scrollable-element:hover > .scrollbar > .slider {
+  background: rgba(100, 100, 100, 0.7) !important;
+}
+
+/* 差异对比编辑器容器 */
+.monaco-diff-editor .diffEditor {
+  gap: 1px !important;
+}
+
+/* 差异对比编辑器的分隔区域样式 */
+.monaco-diff-editor .diffOverviewRuler {
+  display: none !important;
+}
+
+/* 差异对比编辑器的分隔线 */
+.monaco-diff-editor .diffViewport {
+  position: absolute !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: rgba(121, 121, 121, 0.2) !important;
+  width: 30px !important;
+  border-radius: 4px !important;
+  z-index: 10 !important;
+}
+
+/* 差异对比编辑器的内容区域 */
+.monaco-diff-editor .diffDeletedLines {
+  background: rgba(255, 0, 0, 0.1) !important;
+}
+
+.monaco-diff-editor .diffAddedLines {
+  background: rgba(0, 255, 0, 0.1) !important;
+}
+
+/* 差异对比编辑器的行内差异 */
+.monaco-diff-editor .char-delete {
+  background: rgba(255, 0, 0, 0.2) !important;
+}
+
+.monaco-diff-editor .char-insert {
+  background: rgba(0, 255, 0, 0.2) !important;
+} 

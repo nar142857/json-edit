@@ -31,13 +31,15 @@ import {
   Folder as FolderIcon,
   InsertDriveFile as FileIcon,
   History as HistoryIcon,
-  CompareArrows as CompareIcon
+  CompareArrows as CompareIcon,
+  Filter as FilterIcon
 } from '@mui/icons-material'
 import { JsonService, FileService, EditorStateService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
 import './JsonEditor.css'
 import { debounce } from 'lodash'
 import DiffEditor from './DiffEditor'
+import JsonFilter from './JsonFilter'
 
 // 创建暗色主题
 const darkTheme = createTheme({
@@ -96,7 +98,9 @@ class JsonEditor extends Component {
       error: null,
       isDiffMode: false,
       originalValue: '',
-      modifiedValue: ''
+      modifiedValue: '',
+      filterDrawerOpen: false,
+      isExpanded: true, // 添加展开/折叠状态
     }
 
     // 编辑器实例
@@ -165,12 +169,13 @@ class JsonEditor extends Component {
 
       // 添加内容变化监听器
       if (this.inputEditor) {
-        // 使用箭头函数来保持正确的 this 绑定
-        this.inputEditor.onDidChangeModelContent((e) => {
-          this.handleEditorChange(e);
-        });
+        this.inputEditor.onDidChangeModelContent(this.handleEditorChange);
         
-        this.setState({ isEditorMounted: true });
+        // 初始化时设置占位符状态
+        this.setState({ 
+          isEditorMounted: true,
+          placeholder: true
+        });
       }
     } catch (error) {
       console.error('Error initializing editor:', error);
@@ -184,14 +189,17 @@ class JsonEditor extends Component {
     try {
       const content = this.inputEditor.getValue();
       
+      // 更新占位符状态
+      this.setState({ 
+        placeholder: !content.trim(),
+        content 
+      });
+      
       // 如果内容发生变化，标记需要保存
       this.needsSave = true;
       
       // 触发自动保存
       this.autoSave();
-      
-      // 更新编辑器内容
-      this.setState({ content });
     } catch (error) {
       console.error('Error handling editor change:', error);
     }
@@ -306,40 +314,54 @@ class JsonEditor extends Component {
    * 切换差异对比模式
    */
   toggleDiffMode = () => {
-    const { isDiffMode } = this.state;
+    const { isDiffMode } = this.state
+    
     if (!isDiffMode) {
-      // 进入对比模式时，将当前内容设为原始内容
-      const currentValue = this.inputEditor?.getValue() || '';
+      // 进入对比模式，左侧显示当前编辑器内容，右侧为空
+      const currentContent = this.inputEditor.getValue()
       this.setState({
         isDiffMode: true,
-        originalValue: currentValue,
-        modifiedValue: currentValue
-      });
+        originalValue: currentContent,  // 左侧显示当前内容
+        modifiedValue: ''  // 右侧初始为空，等待用户输入
+      })
     } else {
-      // 退出对比模式时，使用修改后的内容更新编辑器
-      const { modifiedValue } = this.state;
+      // 退出对比模式，使用左侧的内容恢复编辑器
+      const { originalValue } = this.state
       
-      // 先更新状态
       this.setState({
         isDiffMode: false,
         originalValue: '',
         modifiedValue: ''
       }, () => {
-        // 在状态更新后重新初始化编辑器
+        // 重新初始化编辑器
         if (this.editorRef.current) {
-          this.initMonacoEditor();
-          // 设置编辑器内容
+          this.initMonacoEditor()
+          // 设置编辑器内容为左侧的内容
           if (this.inputEditor) {
-            this.inputEditor.setValue(modifiedValue);
+            this.inputEditor.setValue(originalValue)
             // 确保编辑器获得焦点
             requestAnimationFrame(() => {
-              this.inputEditor.focus();
-            });
+              this.inputEditor.focus()
+            })
           }
         }
-      });
+      })
     }
-  };
+  }
+
+  /**
+   * 处理原始编辑器内容变化
+   */
+  handleDiffEditorOriginalChange = (value) => {
+    this.setState({ originalValue: value })
+  }
+
+  /**
+   * 处理修改后编辑器内容变化
+   */
+  handleDiffEditorModifiedChange = (value) => {
+    this.setState({ modifiedValue: value })
+  }
 
   /**
    * 初始化编辑器
@@ -861,9 +883,28 @@ class JsonEditor extends Component {
    */
   loadJsonFiles = async () => {
     try {
-      const files = await window.fs.getJsonFiles()
-      this.setState({ jsonFiles: files })
+      // 获取保存文件的路径
+      const filePath = window.utools.getPath('downloads')
+      
+      // 使用 FileService 打开文件选择对话框
+      const result = await FileService.readOpenFileText(['json'], 'JSON', '选择JSON文件')
+      
+      // 如果用户选择了文件，添加到列表中
+      if (result) {
+        const jsonFiles = [{
+          name: result.name,
+          path: result.path,
+          modifiedTime: new Date().getTime()
+        }]
+        
+        this.setState({ jsonFiles })
+      }
     } catch (e) {
+      // 如果用户取消选择，不显示错误
+      if (e === '未发现合法文件') {
+        return
+      }
+      
       console.error('加载文件列表失败:', e)
       this.setState({ 
         messageData: { 
@@ -894,11 +935,14 @@ class JsonEditor extends Component {
    */
   handleFileSelect = async (filePath) => {
     try {
-      const content = await window.services.readFile(filePath)
-      this.inputEditor.setValue(content)
+      // 读取文件内容
+      const text = await window.services.readFile(filePath)
+      
+      // 设置编辑器内容
+      this.inputEditor.setValue(text)
 
-      // 从文件路径中提取文件名，去掉时间戳和扩展名
-      const fileName = filePath.split('/').pop()
+      // 从文件路径中提取标签（去除日期部分）
+      const fileName = filePath.split(/[/\\]/).pop() // 同时处理正斜杠和反斜杠
         .replace(/\.json$/, '') // 去掉扩展名
         .replace(/_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/, '') // 去掉时间戳
 
@@ -1103,18 +1147,104 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 处理差异编辑器原始内容变化
+   * 处理筛选抽屉的开关
    */
-  handleDiffEditorOriginalChange = (newValue) => {
-    this.setState({ originalValue: newValue });
+  handleFilterDrawerToggle = () => {
+    this.setState(prevState => ({
+      filterDrawerOpen: !prevState.filterDrawerOpen
+    }));
   }
 
   /**
-   * 处理差异编辑器修改内容变化
+   * 高亮显示选中的内容
    */
-  handleDiffEditorModifiedChange = (newValue) => {
-    this.setState({ modifiedValue: newValue });
+  handleHighlight = (path) => {
+    try {
+      const content = this.inputEditor.getValue();
+      const jsonData = JSON.parse(content);
+      
+      // 根据路径查找位置
+      const pathParts = path.split('.');
+      let currentObj = jsonData;
+      let found = true;
+      
+      for (const part of pathParts) {
+        if (currentObj.hasOwnProperty(part)) {
+          currentObj = currentObj[part];
+        } else {
+          found = false;
+          break;
+        }
+      }
+      
+      if (found) {
+        // 获取目标文本在编辑器中的位置
+        const model = this.inputEditor.getModel();
+        const text = model.getValue();
+        const lines = text.split('\n');
+        let lineNumber = 1;
+        let found = false;
+        
+        for (const line of lines) {
+          if (line.includes(path.split('.').pop())) {
+            found = true;
+            break;
+          }
+          lineNumber++;
+        }
+        
+        if (found) {
+          // 滚动到目标位置并高亮
+          this.inputEditor.revealLineInCenter(lineNumber);
+          this.inputEditor.setPosition({
+            lineNumber: lineNumber,
+            column: 1
+          });
+          
+          // 创建一个临时的装饰
+          const decorations = [{
+            range: new monaco.Range(lineNumber, 1, lineNumber, 1000),
+            options: {
+              isWholeLine: true,
+              className: 'highlightLine',
+              glyphMarginClassName: 'highlightGlyph'
+            }
+          }];
+          
+          // 添加装饰效果
+          const oldDecorations = this.inputEditor.getModel().getAllDecorations();
+          this.inputEditor.deltaDecorations(oldDecorations, decorations);
+          
+          // 3秒后移除高亮
+          setTimeout(() => {
+            this.inputEditor.deltaDecorations(decorations, []);
+          }, 3000);
+        }
+      }
+    } catch (error) {
+      console.error('Error highlighting in editor:', error);
+    }
   }
+
+  /**
+   * 处理展开/折叠切换
+   */
+  handleFoldToggle = () => {
+    const { isExpanded } = this.state;
+    
+    if (isExpanded) {
+      // 当前是展开状态，执行折叠
+      this.handleCollapseAll();
+    } else {
+      // 当前是折叠状态，执行展开
+      this.handleExpandAll();
+    }
+    
+    // 更新状态
+    this.setState(prevState => ({
+      isExpanded: !prevState.isExpanded
+    }));
+  };
 
   /**
    * 渲染组件
@@ -1122,209 +1252,202 @@ class JsonEditor extends Component {
    */
   render() {
     const { 
-      theme, jsFilter, placeholder, messageData, showLabelInput, label, 
-      fileMenuAnchor, jsonFiles, historyMenuAnchor, history, loading, error,
-      isDiffMode, originalValue, modifiedValue
-    } = this.state
-    const currentTheme = theme === 'dark' ? darkTheme : lightTheme
-
-    // 如果有错误，显示错误信息
-    if (error) {
-      return (
-        <div className="error-boundary">
-          <h2>Something went wrong.</h2>
-          <details style={{ whiteSpace: 'pre-wrap' }}>
-            {error.toString()}
-          </details>
-        </div>
-      )
-    }
-
+      theme, filterDrawerOpen, isDiffMode, showLabelInput, label,
+      fileMenuAnchor, jsonFiles, historyMenuAnchor, history, messageData,
+      placeholder, error, isExpanded, originalValue, modifiedValue
+    } = this.state;
+    
     return (
       <StyledEngineProvider injectFirst>
-        <ThemeProvider theme={currentTheme}>
-          <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
-            <div className="content">
-              {showLabelInput && (
-                <div className="label-input">
-                  <input
-                    ref={this.labelInputRef}
-                    value={label}
-                    onChange={this.handleLabelChange}
-                    placeholder="输入标签描述..."
-                    type="text"
-                  />
-                  <IconButton size="small" onClick={this.handleCloseLabelInput}>
-                    <CloseIcon />
-                  </IconButton>
-                </div>
-              )}
-              <div className="editor-container">
-                {isDiffMode ? (
-                  <DiffEditor
-                    originalValue={originalValue}
-                    modifiedValue={modifiedValue}
-                    language="json"
-                    theme={theme === 'dark' ? 'vs-dark' : 'vs-light'}
-                    height="100%"
-                    onOriginalValueChange={this.handleDiffEditorOriginalChange}
-                    onModifiedValueChange={this.handleDiffEditorModifiedChange}
-                  />
-                ) : (
-                  <div 
-                    ref={this.editorRef}
-                    className="monaco-editor"
-                    style={{ 
-                      width: jsFilter ? '50%' : '100%',
-                      height: '100%',
-                      opacity: this.state.isEditorMounted ? 1 : 0
-                    }}
-                  />
-                )}
+        <ThemeProvider theme={theme === 'dark' ? darkTheme : lightTheme}>
+          <div className="json-editor-container">
+            {/* 标签输入框 */}
+            {showLabelInput && (
+              <div className="label-input">
+                <input
+                  ref={this.labelInputRef}
+                  value={label}
+                  onChange={this.handleLabelChange}
+                  placeholder="输入标签描述..."
+                  type="text"
+                />
+                <IconButton size="small" onClick={this.handleCloseLabelInput}>
+                  <CloseIcon />
+                </IconButton>
               </div>
-            </div>
+            )}
 
+            {isDiffMode ? (
+              <DiffEditor
+                originalValue={originalValue}
+                modifiedValue={modifiedValue}
+                language="json"
+                theme={theme === 'dark' ? 'vs-dark' : 'vs-light'}
+                height="100%"
+                renderSideBySide={true}  // 使用并排显示模式
+                onOriginalValueChange={this.handleDiffEditorOriginalChange}
+                onModifiedValueChange={this.handleDiffEditorModifiedChange}
+              />
+            ) : (
+              <div className={`editor-wrapper ${filterDrawerOpen ? 'with-drawer' : ''}`} ref={this.editorRef} />
+            )}
+            
             {placeholder && (
               <div className="placeholder">
                 URL Params、XML、YAML 粘贴自动转为 JSON
               </div>
             )}
+            
+            <JsonFilter
+              open={filterDrawerOpen}
+              onClose={this.handleFilterDrawerToggle}
+              theme={theme}
+              jsonContent={this.inputEditor ? this.inputEditor.getValue() : ''}
+              onHighlight={this.handleHighlight}
+            />
+            
+            <div className="bottom-toolbar">
+              <Tooltip title="重新格式化「Alt + F」">
+                <IconButton onClick={this.handleReFormat}>
+                  <FormatIcon />
+                </IconButton>
+              </Tooltip>
 
-            <div className="footer">
-              <div className="left">this</div>
-              
-              <div className="right">
-                <input
-                  onChange={this.handleJsFilterInputChange}
-                  placeholder=' JS 过滤; 例 ".key.subkey"、"[0][1]"、".map(x=>x.val)"'
-                  value={jsFilter}
-                  type="text"
-                />
-              </div>
-
-              <div className="handle">
-                <Tooltip title="文件列表" placement="top">
-                  <Button onClick={this.handleFileMenuClick} size="small">
-                    <FolderIcon />
-                  </Button>
-                </Tooltip>
-
-                <Menu
-                  anchorEl={fileMenuAnchor}
-                  open={Boolean(fileMenuAnchor)}
-                  onClose={this.handleFileMenuClose}
+              <Tooltip title={isExpanded ? "全部折叠「Alt + .」" : "全部展开「Alt + . + Shift」"}>
+                <IconButton 
+                  onClick={this.handleFoldToggle}
+                  className={isExpanded ? '' : 'active'}
                 >
-                  {jsonFiles.length === 0 ? (
-                    <MenuItem disabled>
-                      <ListItemText primary="没有保存的文件" />
-                    </MenuItem>
-                  ) : (
-                    jsonFiles.map(file => (
-                      <MenuItem key={file.path} onClick={() => this.handleFileSelect(file.path)}>
-                        <ListItemIcon>
-                          <FileIcon fontSize="small" />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary={file.name} 
-                          secondary={new Date(file.modifiedTime).toLocaleString()}
-                        />
-                      </MenuItem>
-                    ))
-                  )}
-                </Menu>
+                  {isExpanded ? <CollapseIcon /> : <ExpandIcon />}
+                </IconButton>
+              </Tooltip>
 
-                <Tooltip title="历史记录" placement="top">
-                  <Button onClick={this.handleHistoryMenuClick} size="small">
-                    <HistoryIcon />
-                  </Button>
-                </Tooltip>
+              <Divider orientation="vertical" flexItem />
 
-                <Menu
-                  anchorEl={historyMenuAnchor}
-                  open={Boolean(historyMenuAnchor)}
-                  onClose={this.handleHistoryMenuClose}
+              <Tooltip title="压缩复制「Alt + C」">
+                <IconButton onClick={this.handleCompressCopy}>
+                  <CompressIcon />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="压缩引号复制「Alt + \」">
+                <IconButton onClick={this.handleCompressQuoteCopy}>
+                  <EscapeIcon />
+                </IconButton>
+              </Tooltip>
+
+              <Divider orientation="vertical" flexItem />
+
+              <Tooltip title="添加标签「Ctrl/⌘ + T」">
+                <IconButton 
+                  onClick={this.handleLabelClick}
+                  className={showLabelInput ? 'active' : ''}
                 >
-                  {history.length === 0 ? (
-                    <MenuItem disabled>
-                      <ListItemText primary="没有历史记录" />
-                    </MenuItem>
-                  ) : (
-                    history.map(item => (
-                      <MenuItem key={item.id} onClick={() => this.handleHistorySelect(item)}>
-                        <ListItemIcon>
-                          <FileIcon fontSize="small" />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary={item.label || '未命名'}
-                          secondary={new Date(item.timestamp).toLocaleString()}
-                        />
-                      </MenuItem>
-                    ))
-                  )}
-                </Menu>
+                  <LabelIcon />
+                </IconButton>
+              </Tooltip>
 
-                <Tooltip title="重新格式化「Alt + F」" placement="top">
-                  <Button onClick={this.handleReFormat} size="small">
-                    <FormatIcon />
-                  </Button>
-                </Tooltip>
+              <Tooltip title="保存文件「Ctrl/⌘ + S」">
+                <IconButton onClick={this.handleSaveFile}>
+                  <SaveIcon />
+                </IconButton>
+              </Tooltip>
 
-                <Tooltip title="全部展开「Alt + . + Shift」" placement="top">
-                  <Button onClick={this.handleExpandAll} size="small">
-                    <ExpandIcon />
-                  </Button>
-                </Tooltip>
+              <Tooltip title="文件列表">
+                <IconButton 
+                  onClick={this.handleFileMenuClick}
+                  className={Boolean(fileMenuAnchor) ? 'active' : ''}
+                >
+                  <FolderIcon />
+                </IconButton>
+              </Tooltip>
 
-                <Tooltip title="全部折叠「Alt + .」" placement="top">
-                  <Button onClick={this.handleCollapseAll} size="small">
-                    <CollapseIcon />
-                  </Button>
-                </Tooltip>
+              <Tooltip title="历史记录">
+                <IconButton 
+                  onClick={this.handleHistoryMenuClick}
+                  className={Boolean(historyMenuAnchor) ? 'active' : ''}
+                >
+                  <HistoryIcon />
+                </IconButton>
+              </Tooltip>
 
-                <Divider orientation="vertical" flexItem />
+              <Divider orientation="vertical" flexItem />
 
-                <Tooltip title="压缩复制「Alt + C」" placement="top">
-                  <Button onClick={this.handleCompressCopy} size="small">
-                    <CompressIcon />
-                  </Button>
-                </Tooltip>
+              <Tooltip title={isDiffMode ? "退出对比" : "差异对比"}>
+                <IconButton 
+                  onClick={this.toggleDiffMode}
+                  className={isDiffMode ? 'active' : ''}
+                >
+                  <CompareIcon />
+                </IconButton>
+              </Tooltip>
 
-                <Tooltip title="压缩引号复制「Alt + \」" placement="top">
-                  <Button onClick={this.handleCompressQuoteCopy} size="small">
-                    <EscapeIcon />
-                  </Button>
-                </Tooltip>
-
-                <Divider orientation="vertical" flexItem />
-
-                <Tooltip title="添加标签「Ctrl/⌘ + T」" placement="top">
-                  <Button onClick={this.handleLabelClick} size="small">
-                    <LabelIcon />
-                  </Button>
-                </Tooltip>
-
-                <Tooltip title="保存文件「Ctrl/⌘ + S」" placement="top">
-                  <Button onClick={this.handleSaveFile} size="small">
-                    <SaveIcon />
-                  </Button>
-                </Tooltip>
-
-                <Tooltip title={isDiffMode ? "退出对比" : "差异对比"} placement="top">
-                  <Button 
-                    onClick={this.toggleDiffMode}
-                    size="small"
-                  >
-                    <CompareIcon />
-                  </Button>
-                </Tooltip>
-              </div>
+              <Tooltip title="筛选">
+                <IconButton
+                  onClick={this.handleFilterDrawerToggle}
+                  className={filterDrawerOpen ? 'active' : ''}
+                >
+                  <FilterIcon />
+                </IconButton>
+              </Tooltip>
             </div>
 
+            {/* 文件菜单 */}
+            <Menu
+              anchorEl={fileMenuAnchor}
+              open={Boolean(fileMenuAnchor)}
+              onClose={this.handleFileMenuClose}
+            >
+              {jsonFiles.length === 0 ? (
+                <MenuItem disabled>
+                  <ListItemText primary="没有保存的文件" />
+                </MenuItem>
+              ) : (
+                jsonFiles.map(file => (
+                  <MenuItem key={file.path} onClick={() => this.handleFileSelect(file.path)}>
+                    <ListItemIcon>
+                      <FileIcon fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary={file.name} 
+                      secondary={new Date(file.modifiedTime).toLocaleString()}
+                    />
+                  </MenuItem>
+                ))
+              )}
+            </Menu>
+
+            {/* 历史记录菜单 */}
+            <Menu
+              anchorEl={historyMenuAnchor}
+              open={Boolean(historyMenuAnchor)}
+              onClose={this.handleHistoryMenuClose}
+            >
+              {history.length === 0 ? (
+                <MenuItem disabled>
+                  <ListItemText primary="没有历史记录" />
+                </MenuItem>
+              ) : (
+                history.map(item => (
+                  <MenuItem key={item.id} onClick={() => this.handleHistorySelect(item)}>
+                    <ListItemIcon>
+                      <HistoryIcon fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary={item.label || '未命名'} 
+                      secondary={new Date(item.timestamp).toLocaleString()}
+                    />
+                  </MenuItem>
+                ))
+              )}
+            </Menu>
+
+            {/* 消息提示 */}
             <MessageSnackbar messageData={messageData} />
           </div>
         </ThemeProvider>
       </StyledEngineProvider>
-    )
+    );
   }
 
   // 添加错误处理方法
