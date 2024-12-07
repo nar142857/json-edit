@@ -190,10 +190,8 @@ class JsonEditor extends Component {
       // 触发自动保存
       this.autoSave();
       
-      // 如果有 JS 过滤器，更新过滤后的内容
-      if (this.state.jsFilter) {
-        this.handleJsFilter(content);
-      }
+      // 更新编辑器内容
+      this.setState({ content });
     } catch (error) {
       console.error('Error handling editor change:', error);
     }
@@ -500,169 +498,141 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 处理JS过滤器输入变化
+   * 处理 JS 过滤器输入变化
    * @param {Event} e - 输入事件对象
    */
   handleJsFilterInputChange = e => {
-    const filter = e.target.value
-    this.setState({ jsFilter: filter })
+    const filter = e.target.value;
+    console.log('过滤器输入变化:', filter);
+    
+    this.setState({ jsFilter: filter });
 
-    if (!filter) return
+    if (!filter) {
+      console.log('过滤器为空，保持原始内容');
+      return;
+    }
 
     // 使用延时器防抖处理
     if (this.jsFilterInputDelayTimer) {
-      clearTimeout(this.jsFilterInputDelayTimer)
+      clearTimeout(this.jsFilterInputDelayTimer);
+      console.log('清除之前的延时器');
     }
     
+    console.log('设置新的延时器');
     this.jsFilterInputDelayTimer = setTimeout(() => {
-      this.jsFilterInputDelayTimer = null
+      console.log('延时器触发，开始处理过滤');
+      this.jsFilterInputDelayTimer = null;
       
-      if (!this.inputContentObject) {
-        this.jsFilterOutput()
-        return
-      }
-
-      if (this.inputContentObject instanceof Error) return
-
-      if (this.outputEditor) {
-        this.outputEditor.setValue(
-          JsonService.evalJsInContext(filter, this.inputContentObject)
-        )
-      } else {
-        this.jsFilterOutput()
-      }
-    }, 50)
-  }
-
-  /**
-   * 处理快捷键事件
-   * @param {KeyboardEvent} e - 键盘事件对象
-   */
-  keyDownAction = e => {
-    // 禁用F1帮助
-    if (e.code === 'F1') {
-      e.stopPropagation()
-      e.preventDefault()
-      return
-    }
-
-    // Command/Ctrl + S 触发保存功能
-    if ((e.metaKey || e.ctrlKey) && e.code === 'KeyS') {
-      e.stopPropagation()
-      e.preventDefault()
-      this.handleSaveFile()
-      return
-    }
-
-    // Command/Ctrl + T 触发标签功能
-    if ((e.metaKey || e.ctrlKey) && e.code === 'KeyT') {
-      e.stopPropagation()
-      e.preventDefault()
-      this.handleLabelClick()
-      return
-    }
-
-    // 只处理Alt组合键
-    if (!e.altKey) return
-    
-    e.stopPropagation()
-    e.preventDefault()
-
-    // 处理不同的快捷键组合
-    switch (e.code) {
-      case 'KeyF':  // Alt + F: 重新格式化
-        this.handleReFormat()
-        break
-      case 'KeyC':  // Alt + C: 压缩复制
-        this.handleCompressCopy()
-        break
-      case 'Backslash':  // Alt + \: 压缩引号复制
-        this.handleCompressQuoteCopy()
-        break
-      case 'Period':  // Alt + .: 展开/折叠
-        e.shiftKey ? this.handleExpandAll() : this.handleCollapseAll()
-        break
-    }
-  }
-
-  /**
-   * 设置编辑器格式化的值
-   * @param {string} value - 要格式化的字符串
-   */
-  setEditorFormatValue = (value) => {
-    try {
-      // 尝试直接解析整个字符串是否为 JSON
       try {
-        const jsonObj = JSON.parse(value)
-        this.inputEditor.setValue(JSON.stringify(jsonObj, null, 2))
-        this.setState({ placeholder: false })
-        return
-      } catch (e) {
-        // 不是完整的 JSON，续下面的处理
-      }
-
-      // 匹配所有可能的 JSON 内容
-      // 1. body: {...} 格式
-      // 2. headers: {...} 格式
-      // 3. 独立的 {...} 或 [...] 格式
-      const jsonRegex = /(?:body|headers):\s*({[\s\S]*?}|\[[\s\S]*?\])(?=\s*(?:\w+:|\s*$))|({[\s\S]*?}|\[[\s\S]*?\])(?=\s*(?:\w+:|\s*$))/g
-      let lastIndex = 0
-      let result = ''
-      
-      // 查找所有可能的 JSON 部分
-      let match
-      while ((match = jsonRegex.exec(value)) !== null) {
-        try {
-          // 获取完整匹配和捕获组
-          const fullMatch = match[0]
-          const prefix = fullMatch.includes(':') ? fullMatch.split(':')[0] + ': ' : ''
-          const jsonStr = match[1] || match[2] // 第一个捕获组是带前缀的，二个是独立的JSON
-          
-          // 尝试解析并格式化 JSON
-          const formattedJson = JSON.stringify(JSON.parse(jsonStr), null, 2)
-          
-          // 添加 JSON 之前的普通文本
-          result += value.slice(lastIndex, match.index)
-          // 添加前缀（如果有）和格式化后的 JSON
-          result += prefix + formattedJson
-          
-          lastIndex = match.index + fullMatch.length
-        } catch (e) {
-          // 如果解析失败，保持原样
-          result += value.slice(lastIndex, match.index + match[0].length)
-          lastIndex = match.index + match[0].length
+        const content = this.inputEditor.getValue();
+        console.log('当前编辑器内容:', content);
+        
+        if (!content.trim()) {
+          console.log('编辑器内容为空，退出过滤');
+          return;
         }
+
+        // 验证当前内容是否为有效的 JSON
+        let jsonData;
+        try {
+          jsonData = JSON.parse(content);
+          console.log('JSON 解析成功:', jsonData);
+        } catch (error) {
+          console.error('JSON 解析失败:', error);
+          console.error('无效的 JSON 内容:', content);
+          this.setState({
+            messageData: {
+              message: '请先确保编辑器中的内容是有效的 JSON',
+              type: 'error'
+            }
+          });
+          return;
+        }
+
+        // 创建过滤函数
+        let filterFunction;
+        try {
+          // 如果过滤表达式以 "json" 开头，直接使用
+          // 否则，添加 "json" 前缀
+          const processedExpression = filter.trim().startsWith('json') 
+            ? filter 
+            : `json${filter}`;
+          
+          console.log('处理后的过滤表达式:', processedExpression);
+
+          filterFunction = new Function('json', `
+            try {
+              console.log('执行过滤函数，输入数据:', json);
+              const result = ${processedExpression};
+              console.log('过滤结果:', result);
+              return result;
+            } catch (error) {
+              console.error('过滤表达式执行错误:', error);
+              throw new Error('过滤表达式错误: ' + error.message);
+            }
+          `);
+        } catch (error) {
+          console.error('创建过滤函数失败:', error);
+          throw new Error('过滤表达式语法错误: ' + error.message);
+        }
+
+        // 应用过滤器
+        console.log('开始执行过滤函数');
+        const filteredResult = filterFunction(jsonData);
+        console.log('过滤执行完成，结果:', filteredResult);
+
+        // 将结果转换回 JSON 字符串并格式化
+        const formattedResult = typeof filteredResult === 'string' 
+          ? filteredResult 
+          : JSON.stringify(filteredResult, null, 2);
+        
+        console.log('格式化后的结果:', formattedResult);
+
+        // 更新编辑器内容
+        this.inputEditor.setValue(formattedResult);
+        console.log('已更新编辑器内容');
+
+        // 清除错误消息
+        this.setState({ messageData: null });
+
+      } catch (error) {
+        console.error('JSON 过滤过程中发生错误:', error);
+        console.error('错误堆栈:', error.stack);
+        this.setState({
+          messageData: {
+            message: error.message,
+            type: 'error'
+          }
+        });
       }
-      
-      // 添加最后一部分普通文本
-      result += value.slice(lastIndex)
-      
-      this.inputEditor.setValue(result)
-      this.setState({ placeholder: false })
-    } catch (e) {
-      // 如果出现错误，直接显示原始内容
-      console.error('格式化错误:', e)
-      this.inputEditor.setValue(value)
-      this.setState({ placeholder: false })
-    }
-  }
+    }, 300);
+  };
 
   /**
-   * 执行JS过滤器并输出结果
+   * 处理工具栏过滤按钮点击
    */
-  jsFilterOutput = () => {
-    if (!this.inputContentObject || this.inputContentObject instanceof Error) {
-      this.setState({ messageData: { type: 'error', message: 'Invalid JSON content' } })
-      return
-    }
-
+  handleFilterClick = () => {
     try {
-      const result = JsonService.evalJsInContext(this.state.jsFilter, this.inputContentObject)
-      this.outputEditor.setValue(result)
-    } catch (e) {
-      this.setState({ messageData: { type: 'error', message: 'JS filter error' } })
+      console.log('过滤按钮被点击');
+      const filterExpression = prompt('请输入过滤表达式 (例如: .field1 或 .array.filter(item => item.id > 10))');
+      console.log('用户输入的过滤表达式:', filterExpression);
+      
+      if (filterExpression) {
+        this.handleJsonFilter(filterExpression);
+      } else {
+        console.log('用户取消了输入');
+      }
+    } catch (error) {
+      console.error('处理过滤按钮点击失败:', error);
+      console.error('错误堆栈:', error.stack);
+      this.setState({
+        messageData: {
+          message: '过滤操作失败: ' + error.message,
+          type: 'error'
+        }
+      });
     }
-  }
+  };
 
   /**
    * 重新格式化
