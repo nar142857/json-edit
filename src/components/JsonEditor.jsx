@@ -100,7 +100,7 @@ class JsonEditor extends Component {
       originalValue: '',
       modifiedValue: '',
       filterDrawerOpen: false,
-      isExpanded: true, // 添加展开/折叠状态
+      isExpanded: true, // 添加展开/折叠��
     }
 
     // 编辑器实例
@@ -492,8 +492,8 @@ class JsonEditor extends Component {
    * 处理输入编辑器内容变化
    * 主要功能：
    * 1. 监听编辑器内容变化
-   * 2. 根据内容是否为空控制 placeholder 的显示/隐藏
-   * 3. 尝解析 JSON 内容
+   * 2. 根据内容是否为空控�� placeholder 的显示/隐藏
+   * 3. 尝试解析 JSON 内容
    * 4. 如果存在 JS 过滤器则更新输出
    */
   handleEditorContentChange = () => {
@@ -663,7 +663,7 @@ class JsonEditor extends Component {
     try {
       const value = this.inputEditor.getValue()
       
-      // 尝试直接解析整个字符串是否为 JSON
+      // 尝试直接解析整个字符串��否为 JSON
       try {
         const jsonObj = JSON.parse(value)
         this.inputEditor.setValue(JSON.stringify(jsonObj, null, 2))
@@ -694,7 +694,7 @@ class JsonEditor extends Component {
           
           // 添加 JSON 之前的普通文本
           result += value.slice(lastIndex, match.index)
-          // 添加前缀（如果有）和格式化后的 JSON
+          // 添加前（如果有）和格式化后的 JSON
           result += prefix + formattedJson
           
           lastIndex = match.index + fullMatch.length
@@ -942,7 +942,7 @@ class JsonEditor extends Component {
       this.inputEditor.setValue(text)
 
       // 从文件路径中提取标签（去除日期部分）
-      const fileName = filePath.split(/[/\\]/).pop() // 同时处理正斜杠和反斜杠
+      const fileName = filePath.split(/[/\\]/).pop() // 同时处理正斜杠和反��杠
         .replace(/\.json$/, '') // 去掉扩展名
         .replace(/_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/, '') // 去掉时间戳
 
@@ -1020,14 +1020,27 @@ class JsonEditor extends Component {
    */
   listenPluginEnter = () => {
     window.utools.onPluginEnter(({ type, payload }) => {
-      if (type === 'regex') {
+      if (type === 'regex' || type === 'over') {
         this.setState({ placeholder: false, jsFilter: '' })
         this.inputContentObject = null
-        this.setEditorFormatValue(payload)
+        
+        try {
+          let content = payload.trim();
+          const parsed = JSON.parse(content);
+          content = JSON.stringify(parsed, null, 2);
+          this.inputEditor.setValue(content);
+          
+          if (window.fs && window.fs.saveEditorState) {
+            window.fs.saveEditorState(content, 'From uTools Search');
+          }
+        } catch (error) {
+          console.error('Invalid JSON format:', error);
+          this.inputEditor.setValue(payload);
+        }
       } else if (type === 'files') {
         this.setState({ placeholder: false, jsFilter: '' })
         this.inputContentObject = null
-        this.setEditorFormatValue(window.services.readFileContent(payload[0].path))
+        this.inputEditor.setValue(window.services.readFileContent(payload[0].path))
       } else {
         const hasContent = this.inputEditor && this.inputEditor.getValue().trim()
         this.setState({ placeholder: !hasContent })
@@ -1147,7 +1160,7 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 处理筛选抽屉的开关
+   * 处理���选抽屉的开关
    */
   handleFilterDrawerToggle = () => {
     this.setState(prevState => ({
@@ -1236,7 +1249,7 @@ class JsonEditor extends Component {
       // 当前是展开状态，执行折叠
       this.handleCollapseAll();
     } else {
-      // 当前是折叠状态，执行展开
+      // 当前是折叠态，执行展开
       this.handleExpandAll();
     }
     
@@ -1313,7 +1326,7 @@ class JsonEditor extends Component {
                 </IconButton>
               </Tooltip>
 
-              <Tooltip title={isExpanded ? "全部折叠「Alt + .」" : "全部展开「Alt + . + Shift」"}>
+              <Tooltip title={isExpanded ? "全部折叠「Alt + ." : "全部展开「Alt + . + Shift」"}>
                 <IconButton 
                   onClick={this.handleFoldToggle}
                   className={isExpanded ? '' : 'active'}
