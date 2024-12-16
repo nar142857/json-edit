@@ -53,9 +53,37 @@ const DiffEditor = ({
       
       if (!originalEditor || !modifiedEditor) return;
 
+      // 尝试格式化内容
+      const formatJsonContent = (content) => {
+        try {
+          // 检查是否为标准JSON
+          const trimmedContent = content.trim();
+          if (
+            (trimmedContent.startsWith('{') && trimmedContent.endsWith('}')) ||
+            (trimmedContent.startsWith('[') && trimmedContent.endsWith(']'))
+          ) {
+            try {
+              // 尝试解析和格式化JSON
+              const parsed = JSON.parse(trimmedContent);
+              return JSON.stringify(parsed, null, 2);
+            } catch (e) {
+              // 解析失败，返回原内容
+              return content;
+            }
+          }
+          return content;
+        } catch (e) {
+          return content;
+        }
+      };
+
+      // 格式化原始内容和修改后的内容
+      const formattedOriginal = formatJsonContent(original || '');
+      const formattedModified = formatJsonContent(modified || '');
+
       // 创建新的模型
-      const newOriginalModel = monaco.editor.createModel(original || '', language);
-      const newModifiedModel = monaco.editor.createModel(modified || '', language);
+      const newOriginalModel = monaco.editor.createModel(formattedOriginal, language);
+      const newModifiedModel = monaco.editor.createModel(formattedModified, language);
 
       // 清理旧的监听器和模型
       disposablesRef.current.forEach(d => d?.dispose());
@@ -85,32 +113,40 @@ const DiffEditor = ({
       disposablesRef.current.push(
         newOriginalModel.onDidChangeContent((e) => {
           if (onOriginalValueChange) {
-            const changes = e.changes[0];
-            const text = changes.text;
-            const isNewLine = text.includes('\n') || text.includes('\r\n');
+            const content = newOriginalModel.getValue();
+            // 尝试格式化新内容
+            const formattedContent = formatJsonContent(content);
             
-            let position;
-            if (isNewLine) {
-              position = {
-                lineNumber: changes.range.endLineNumber + 1,
-                column: 1
-              };
-            } else if (changes.text === '') {
-              // 处理回撤操作
-              position = {
-                lineNumber: changes.range.startLineNumber,
-                column: changes.range.startColumn
-              };
-            } else {
-              position = {
-                lineNumber: changes.range.endLineNumber,
-                column: changes.range.endColumn + changes.text.length
-              };
+            // 如果内容相同，不进行更新避免无限循环
+            if (formattedContent === content) {
+              const changes = e.changes[0];
+              updateCursorPosition(changes, 'original');
+              onOriginalValueChange(content);
+              return;
             }
-            
-            setLastPosition(position);
-            setActiveEditor('original');
-            onOriginalValueChange(newOriginalModel.getValue());
+
+            // 使用 setTimeout 延迟更新，避免差异计算时的竞态条件
+            setTimeout(() => {
+              try {
+                // 如果编辑器已经被销毁，直接返回
+                if (!editorRef.current) return;
+                
+                const currentContent = newOriginalModel.getValue();
+                // 再次检查内容是否已经改变，避免重复更新
+                if (currentContent !== formattedContent) {
+                  newOriginalModel.setValue(formattedContent);
+                  // 更新后重新设置光标位置
+                  const editor = editorRef.current.getOriginalEditor();
+                  if (editor && lastPosition) {
+                    editor.setPosition(lastPosition);
+                    editor.revealPositionInCenter(lastPosition);
+                  }
+                }
+                onOriginalValueChange(formattedContent);
+              } catch (error) {
+                console.error('Error updating original content:', error);
+              }
+            }, 0);
           }
         })
       );
@@ -118,35 +154,70 @@ const DiffEditor = ({
       disposablesRef.current.push(
         newModifiedModel.onDidChangeContent((e) => {
           if (onModifiedValueChange) {
-            const changes = e.changes[0];
-            const text = changes.text;
-            const isNewLine = text.includes('\n') || text.includes('\r\n');
+            const content = newModifiedModel.getValue();
+            // 尝试格式化新内容
+            const formattedContent = formatJsonContent(content);
             
-            let position;
-            if (isNewLine) {
-              position = {
-                lineNumber: changes.range.endLineNumber + 1,
-                column: 1
-              };
-            } else if (changes.text === '') {
-              // 处理回撤操作
-              position = {
-                lineNumber: changes.range.startLineNumber,
-                column: changes.range.startColumn
-              };
-            } else {
-              position = {
-                lineNumber: changes.range.endLineNumber,
-                column: changes.range.endColumn + changes.text.length
-              };
+            // 如果内容相同，不进行更新避免无限循环
+            if (formattedContent === content) {
+              const changes = e.changes[0];
+              updateCursorPosition(changes, 'modified');
+              onModifiedValueChange(content);
+              return;
             }
-            
-            setLastPosition(position);
-            setActiveEditor('modified');
-            onModifiedValueChange(newModifiedModel.getValue());
+
+            // 使用 setTimeout 延迟更新，避免差异计算时的竞态条件
+            setTimeout(() => {
+              try {
+                // 如果编辑器已经被销毁，直接返回
+                if (!editorRef.current) return;
+                
+                const currentContent = newModifiedModel.getValue();
+                // 再次检查内容是否已经改变，避免重复更新
+                if (currentContent !== formattedContent) {
+                  newModifiedModel.setValue(formattedContent);
+                  // 更新后重新设置光标位置
+                  const editor = editorRef.current.getModifiedEditor();
+                  if (editor && lastPosition) {
+                    editor.setPosition(lastPosition);
+                    editor.revealPositionInCenter(lastPosition);
+                  }
+                }
+                onModifiedValueChange(formattedContent);
+              } catch (error) {
+                console.error('Error updating modified content:', error);
+              }
+            }, 0);
           }
         })
       );
+
+      // 辅助函数：更新光标位置
+      const updateCursorPosition = (changes, editorType) => {
+        const text = changes.text;
+        const isNewLine = text.includes('\n') || text.includes('\r\n');
+        
+        let position;
+        if (isNewLine) {
+          position = {
+            lineNumber: changes.range.endLineNumber + 1,
+            column: 1
+          };
+        } else if (text === '') {
+          position = {
+            lineNumber: changes.range.startLineNumber,
+            column: changes.range.startColumn
+          };
+        } else {
+          position = {
+            lineNumber: changes.range.endLineNumber,
+            column: changes.range.endColumn + text.length
+          };
+        }
+        
+        setLastPosition(position);
+        setActiveEditor(editorType);
+      };
 
       // 添加焦点监听器
       disposablesRef.current.push(
