@@ -1,0 +1,126 @@
+# Cursor Rules Configuration
+
+# 处理指令规范
+修改前通读整个项目，理解项目功能，不要影响现有功能，代码改动范围尽可能小，新增功能在readme文件中追加内容不要修改删除已有的内容
+
+# 文件命名规则
+files:
+  - pattern: "**/*.{js,jsx,ts,tsx}"
+    naming: "kebab-case"
+  - pattern: "**/*.{css,scss,less}"
+    naming: "kebab-case"
+  - pattern: "**/*.{md,mdx}"
+    naming: "kebab-case"
+
+# 代码格式化规则
+formatting:
+  indent: 2                    # 缩进空格数
+  maxLineLength: 100           # 最大行长度
+  trailingComma: "es5"        # 尾随逗号样式
+  singleQuote: true           # 使用单引号
+  semi: true                  # 使用分号
+
+# 代码质量规则
+quality:
+  complexity:
+    maxCyclomaticComplexity: 10    # 最大圈复杂度
+    maxDepth: 3                    # 最大嵌套深度
+  
+  naming:
+    components: "PascalCase"       # React组件命名
+    functions: "camelCase"         # 函数命名
+    variables: "camelCase"         # 变量命名
+    constants: "UPPER_SNAKE_CASE"  # 常量命名
+    
+  patterns:
+    - name: "避免大文件"
+      rule: "文件不应超过300行代码"
+    
+    - name: "函数大小限制"
+      rule: "函数不应超过50行代码"
+    
+    - name: "组件职责"
+      rule: "每个组件应该只负责一个功能"
+
+# 文档要求
+documentation:
+  required:
+    - "所有公共函数必须有JSDoc注释"
+    - "所有组件必须有使用说明文档"
+    - "复杂逻辑必须有行内注释说明"
+    - "所有配置文件必须有说明文档"
+
+# Git提交规范
+git:
+  commitMessage:
+    format: "<type>(<scope>): <subject>"
+    types:
+      - "feat: 新功能"
+      - "fix: 修复bug"
+      - "docs: 文档更新"
+      - "style: 代码格式调整"
+      - "refactor: 代码重构"
+      - "test: 测试相关"
+      - "chore: 构建/工具链/辅助工具的变动"
+
+# 项目结构规范
+structure:
+  src:
+    components: "可复用的UI组件"
+    pages: "页面级组件"
+    hooks: "自定义Hook"
+    utils: "工具函数"
+    services: "API服务"
+    assets: "静态资源"
+    styles: "全局样式"
+    types: "TypeScript类型定义"
+
+# 性能优化要求
+performance:
+  - "避免不必要的重渲染"
+  - "合理使用useMemo和useCallback"
+  - "图片资源需要优化"
+  - "合理使用代码分割"
+  - "避免过度使用全局状态"
+
+# 安全规范
+security:
+  - "所有用户输入必须验证"
+  - "避免在前端存储敏感信息"
+  - "使用HTTPS进行API通信"
+  - "实现适当的访问控制"
+  - "防���XSS和CSRF攻击"
+
+# 测试要求
+testing:
+  coverage:
+    statements: 80
+    branches: 80
+    functions: 80
+    lines: 80
+  types:
+    - "单元测试"
+    - "集成测试"
+    - "端到端测试"
+
+# 可访问性要求
+accessibility:
+  - "所有图片必须有alt属性"
+  - "使用语义化HTML标签"
+  - "确保适当的颜色对比度"
+  - "支持键盘导航"
+  - "提供ARIA标签"
+
+# 国际化规范
+i18n:
+  - "所有文本必须使用i18n工具管理"
+  - "支持RTL布局"
+  - "日期时间格式本地化"
+  - "数字格式本地化"
+
+# 错误处理
+errorHandling:
+  - "所有异步操作必须有错误处理"
+  - "提供用户友好的错误提示"
+  - "记录错误日志"
+  - "实现全局错误边界" 
