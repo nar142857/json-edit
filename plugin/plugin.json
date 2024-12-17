@@ -14,7 +14,7 @@
         {
           "type": "regex",
           "minLength": 2,
-          "match": "/^\\s*(\\{[\\s\\S]*\\}|\\[[\\s\\S]*\\])\\s*$/",
+          "match": "/.*?({[\\s\\S]*?}|\\[[\\s\\S]*?\\])/",
           "label": "Json"
         },
         {
@@ -42,7 +42,7 @@
   "name": "jsoneditor",
   "pluginName": "JSON 编辑器",
   "description": "JSON 格式化处理",
-  "author": "福州猿力信息科技有限公司",
+  "author": "太极",
   "homepage": "https://u.tools",
-  "version": "1.7.1"
+  "version": "1.0.4"
 }

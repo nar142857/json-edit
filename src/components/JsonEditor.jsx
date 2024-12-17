@@ -100,7 +100,7 @@ class JsonEditor extends Component {
       originalValue: '',
       modifiedValue: '',
       filterDrawerOpen: false,
-      isExpanded: true, // 添加展开/折叠状态
+      isExpanded: true, // 添加展开/折叠
     }
 
     // 编辑器实例
@@ -492,8 +492,8 @@ class JsonEditor extends Component {
    * 处理输入编辑器内容变化
    * 主要功能：
    * 1. 监听编辑器内容变化
-   * 2. 根据内容是否为空控制 placeholder 的显示/隐藏
-   * 3. 尝解析 JSON 内容
+   * 2. 根据内容是否为制 placeholder 的显示/隐藏
+   * 3. 尝试解析 JSON 内容
    * 4. 如果存在 JS 过滤器则更新输出
    */
   handleEditorContentChange = () => {
@@ -525,7 +525,7 @@ class JsonEditor extends Component {
    */
   handleJsFilterInputChange = e => {
     const filter = e.target.value;
-    console.log('过滤器输入变化:', filter);
+    console.log('过滤器输变化:', filter);
     
     this.setState({ jsFilter: filter });
 
@@ -612,7 +612,7 @@ class JsonEditor extends Component {
 
         // 更新编辑器内容
         this.inputEditor.setValue(formattedResult);
-        console.log('已更新编辑器内容');
+        console.log('��更新编辑器内容');
 
         // 清除错误消息
         this.setState({ messageData: null });
@@ -661,57 +661,248 @@ class JsonEditor extends Component {
    */
   handleReFormat = () => {
     try {
-      const value = this.inputEditor.getValue()
+      const value = this.inputEditor.getValue();
       
-      // 尝试直接解析整个字符串是否为 JSON
-      try {
-        const jsonObj = JSON.parse(value)
-        this.inputEditor.setValue(JSON.stringify(jsonObj, null, 2))
-        return
-      } catch (e) {
-        // 不是完整的 JSON，继续下面的处理
-      }
+      // 使用与 listenPluginEnter 相关的理逻辑
+      const formattedContent = this.formatJsonInText(value);
+      
+      // 更新编辑器内容
+      this.inputEditor.setValue(formattedContent);
+      
+      // 清除错误消息
+      this.setState({ messageData: null });
+    } catch (e) {
+      console.error('格式化失败:', e);
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '格式化失败: ' + e.message 
+        } 
+      });
+    }
+  }
 
-      // 匹配所有可能的 JSON 内容
-      // 1. body: {...} 格式
-      // 2. headers: {...} 格式
-      // 3. 独立的 {...} 或 [...] 格式
-      const jsonRegex = /(?:body|headers):\s*({[\s\S]*?}|\[[\s\S]*?\])(?=\s*(?:\w+:|\s*$))|({[\s\S]*?}|\[[\s\S]*?\])(?=\s*(?:\w+:|\s*$))/g
-      let lastIndex = 0
-      let result = ''
-      
-      // 查找所有可能的 JSON 部分
-      let match
-      while ((match = jsonRegex.exec(value)) !== null) {
+  /**
+   * 在文本中查找并格式化JSON部分，保留其他文本
+   * @param {string} text - 输入文本
+   * @returns {string} - 处理后的文本
+   */
+  formatJsonInText = (text) => {
+    try {
+      // 1. 首先尝试判断是否为标准JSON
+      const trimmedText = text.trim();
+      if (
+        (trimmedText.startsWith('{') && trimmedText.endsWith('}')) ||
+        (trimmedText.startsWith('[') && trimmedText.endsWith(']'))
+      ) {
         try {
-          // 取完整匹配捕获组
-          const fullMatch = match[0]
-          const prefix = fullMatch.includes(':') ? fullMatch.split(':')[0] + ': ' : ''
-          const jsonStr = match[1] || match[2] // 第一个捕获组是带前缀的，第二个是独立的JSON
-          
-          // 尝试解析并格式化 JSON
-          const formattedJson = JSON.stringify(JSON.parse(jsonStr), null, 2)
-          
-          // 添加 JSON 之前的普通文本
-          result += value.slice(lastIndex, match.index)
-          // 添加前缀（如果有）和格式化后的 JSON
-          result += prefix + formattedJson
-          
-          lastIndex = match.index + fullMatch.length
+          // 如果可以解析为JSON对象,说明是标准JSON
+          const parsed = JSON.parse(trimmedText);
+          // 直接使用JSON.stringify格式化
+          return JSON.stringify(parsed, null, 2);
         } catch (e) {
-          // 如果解析失败，保持原样
-          result += value.slice(lastIndex, match.index + match[0].length)
-          lastIndex = match.index + match[0].length
+          // 解析失败,说明不是标准JSON,继续使用混合内容处理方式
+          console.log('Not standard JSON, using mixed content handler');
         }
       }
+
+      // 2. 处理混合内容
+      // 匹配可能的JSON结构（更宽松的模式）
+      const jsonRegex = /({[\s\S]*?}|\[[\s\S]*?\])/g;
+      let lastIndex = 0;
+      let result = '';
+      let match;
+
+      while ((match = jsonRegex.exec(text)) !== null) {
+        // 添加JSON之前的文本（保持原样）
+        const prefix = text.slice(lastIndex, match.index);
+        
+        // 处理前缀文本，保留其格式但去除多余空行
+        if (prefix) {
+          const trimmedPrefix = prefix.replace(/\n{2,}/g, '\n').trimEnd();
+          result += trimmedPrefix;
+          // 如果前缀不是以换行结尾添加一个换行
+          if (!trimmedPrefix.endsWith('\n')) {
+            result += '\n';
+          }
+        }
+        
+        try {
+          // 尝试解析和格式化JSON部分
+          let jsonPart = match[0];
+          
+          // 尝试修复和解析JSON
+          try {
+            // 首先移除多余的空格和换行
+            jsonPart = jsonPart.replace(/^\s+|\s+$/g, '');
+            const parsed = JSON.parse(jsonPart);
+            
+            // 自定义格式化JSON
+            jsonPart = this.customFormatJson(parsed);
+          } catch (e) {
+            // 如果解析失败，尝试修复非标准JSON
+            jsonPart = this.fixJsonString(jsonPart);
+          }
+          
+          result += jsonPart;
+          
+          // 在JSON块后添加一个换行（如果后面还有内容）
+          if (match.index + match[0].length < text.length) {
+            result += '\n';
+          }
+        } catch (e) {
+          // 如果处理失败，保持原样
+          result += match[0];
+        }
+        
+        lastIndex = match.index + match[0].length;
+      }
       
-      // 添加最后一部分普通文本
-      result += value.slice(lastIndex)
+      // 添加剩余的非JSON文本（保持原样）
+      const remaining = text.slice(lastIndex);
+      if (remaining) {
+        // 处理剩余文本，保留格式但去除多余空行
+        const trimmedRemaining = remaining.replace(/\n{2,}/g, '\n').trimStart();
+        // 如果前面有内容且不是以换行结尾，先添加换行
+        if (result && !result.endsWith('\n') && trimmedRemaining) {
+          result += '\n';
+        }
+        result += trimmedRemaining;
+      }
       
-      this.inputEditor.setValue(result)
+      // 确保最终结果不会有多余的空行，并保持适当的缩进
+      return result.replace(/\n{3,}/g, '\n\n').trim() || text;
     } catch (e) {
-      this.setState({ messageData: { type: 'error', message: '格式化失败' } })
+      console.error('格式化JSON文本失败:', e);
+      return text;
     }
+  }
+
+  /**
+   * 修复非标准JSON字符串
+   * @param {string} str - 需要修复的JSON字符串
+   * @returns {string} - 修复后的JSON字符串
+   */
+  fixJsonString = (str) => {
+    try {
+      let processedStr = str;
+      
+      // 1. 处理不规范的格式
+      processedStr = processedStr
+        // 处理独立的逗号和冒号
+        .replace(/\s*,\s*(?=[\s\n]*["}{\]])/g, '')  // 移除多余的逗号
+        .replace(/\s*:\s*(?=[\s\n]*["}{\]])/g, '')  // 移除多余的冒号
+        .replace(/(["}{\]])\s*,?\s*\n*\s*(["{{\[])/g, '$1,$2')  // 修复对象/数组之间的逗号
+        .replace(/\n\s*,\s*\n/g, ',\n')  // 修复换行中的逗号位置
+        .replace(/,(\s*[}\]])/g, '$1');  // 移除末尾多余的逗号
+      
+      // 2. 处理未加引号的键名（支持更多字符）
+      processedStr = processedStr.replace(/([{,]\s*)([a-zA-Z0-9_$@\-/]+)\s*:/g, '$1"$2":');
+      
+      // 3. 处理单引号包裹的字符串
+      processedStr = processedStr.replace(/'([^']*)'(?=\s*[,}\]])/g, '"$1"');
+      
+      // 4. 处理错误的布尔值和null写法
+      processedStr = processedStr
+        .replace(/:\s*True\b/g, ': true')
+        .replace(/:\s*False\b/g, ': false')
+        .replace(/:\s*None\b/g, ': null');
+      
+      // 5. 处理数值周围不必要的引号
+      processedStr = processedStr.replace(/"(-?\d+\.?\d*)"(?=\s*[,}\]])/g, '$1');
+      
+      // 6. 处理版本号格式（如 ^7.23.3）
+      processedStr = processedStr.replace(/"(\^?\d+\.\d+\.\d+)"(?=\s*[,}\]])/g, '"$1"');
+      
+      // 7. 处理特殊字符转义
+      processedStr = processedStr
+        .replace(/\\n/g, '\n')
+        .replace(/\\t/g, '\t')
+        .replace(/\\r/g, '\r')
+        .replace(/\\\\/g, '\\')
+        .replace(/\\"/g, '"');
+      
+      // 8. 验证修复后的JSON是否有效
+      const parsed = JSON.parse(processedStr);
+      return this.customFormatJson(parsed);
+    } catch (e) {
+      // 如果仍然无法解析，返回原始字符串
+      return str;
+    }
+  }
+
+  /**
+   * 自定义JSON格式化
+   * @param {Object} obj - 要格式化的JSON对象
+   * @param {number} level - 当前缩进级别
+   * @returns {string} - 格式化后的JSON字符串
+   */
+  customFormatJson = (obj, level = 0) => {
+    const indent = '  '.repeat(level);
+    const nextIndent = '  '.repeat(level + 1);
+    
+    if (typeof obj !== 'object' || obj === null) {
+      return JSON.stringify(obj);
+    }
+    
+    if (Array.isArray(obj)) {
+      if (obj.length === 0) return '[]';
+      
+      const items = obj.map(item => nextIndent + this.customFormatJson(item, level + 1));
+      return '[\n' + items.join(',\n') + '\n' + indent + ']';
+    }
+    
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return '{}';
+    
+    // 对键进行分组
+    const groups = {
+      meta: ['name', 'version', 'description', 'author', 'license', 'main', 'private', 'type'],
+      scripts: ['scripts'],
+      dependencies: ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'],
+      config: ['config', 'settings', 'options'],
+      other: []
+    };
+    
+    // 对键进行分类
+    const groupedKeys = {};
+    keys.forEach(key => {
+      let found = false;
+      for (const [group, groupKeys] of Object.entries(groups)) {
+        if (groupKeys.includes(key)) {
+          groupedKeys[group] = groupedKeys[group] || [];
+          groupedKeys[group].push(key);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        groupedKeys.other = groupedKeys.other || [];
+        groupedKeys.other.push(key);
+      }
+    });
+    
+    // 按顺序处理每个组
+    const result = [];
+    const groupOrder = ['meta', 'scripts', 'dependencies', 'config', 'other'];
+    
+    groupOrder.forEach((group, groupIndex) => {
+      if (groupedKeys[group] && groupedKeys[group].length > 0) {
+        // 只在组之间添加空行，不在开头和结尾添加
+        if (groupIndex > 0 && result.length > 0) {
+          result.push('');
+        }
+        
+        groupedKeys[group].forEach((key, index) => {
+          const value = obj[key];
+          const formattedValue = this.customFormatJson(value, level + 1);
+          const line = nextIndent + JSON.stringify(key) + ': ' + formattedValue;
+          result.push(line + (index < groupedKeys[group].length - 1 ? ',' : ''));
+        });
+      }
+    });
+    
+    return '{\n' + result.join('\n') + '\n' + indent + '}';
   }
 
   /**
@@ -938,13 +1129,13 @@ class JsonEditor extends Component {
       // 读取文件内容
       const text = await window.services.readFile(filePath)
       
-      // 设置编辑器内容
+      // 置编辑器内容
       this.inputEditor.setValue(text)
 
       // 从文件路径中提取标签（去除日期部分）
       const fileName = filePath.split(/[/\\]/).pop() // 同时处理正斜杠和反斜杠
         .replace(/\.json$/, '') // 去掉扩展名
-        .replace(/_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/, '') // 去掉时间戳
+        .replace(/_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/, '') // 去掉时间
 
       this.setState({ 
         fileMenuAnchor: null,
@@ -1020,14 +1211,29 @@ class JsonEditor extends Component {
    */
   listenPluginEnter = () => {
     window.utools.onPluginEnter(({ type, payload }) => {
-      if (type === 'regex') {
+      if (type === 'regex' || type === 'over') {
         this.setState({ placeholder: false, jsFilter: '' })
         this.inputContentObject = null
-        this.setEditorFormatValue(payload)
+        
+        try {
+          let content = payload.trim();
+          
+          // 尝试在文本中查找并格式化JSON部分，保留其他文本
+          content = this.formatJsonInText(content);
+          
+          this.inputEditor.setValue(content);
+          
+          if (window.fs && window.fs.saveEditorState) {
+            window.fs.saveEditorState(content, 'From uTools Search');
+          }
+        } catch (error) {
+          console.error('处理输入数据失败:', error);
+          this.inputEditor.setValue(payload);
+        }
       } else if (type === 'files') {
         this.setState({ placeholder: false, jsFilter: '' })
         this.inputContentObject = null
-        this.setEditorFormatValue(window.services.readFileContent(payload[0].path))
+        this.inputEditor.setValue(window.services.readFileContent(payload[0].path))
       } else {
         const hasContent = this.inputEditor && this.inputEditor.getValue().trim()
         this.setState({ placeholder: !hasContent })
@@ -1147,7 +1353,7 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 处理筛选抽屉的开关
+   * 处理选抽屉的开关
    */
   handleFilterDrawerToggle = () => {
     this.setState(prevState => ({
@@ -1233,10 +1439,10 @@ class JsonEditor extends Component {
     const { isExpanded } = this.state;
     
     if (isExpanded) {
-      // 当前是展开状态，执行折叠
+      // 当前是展开状态执行折叠
       this.handleCollapseAll();
     } else {
-      // 当前是折叠状态，执行展开
+      // 当前是折叠态，执行展开
       this.handleExpandAll();
     }
     
@@ -1313,7 +1519,7 @@ class JsonEditor extends Component {
                 </IconButton>
               </Tooltip>
 
-              <Tooltip title={isExpanded ? "全部折叠「Alt + .」" : "全部展开「Alt + . + Shift」"}>
+              <Tooltip title={isExpanded ? "全部折叠「Alt + ." : "全部展开「Alt + . + Shift」"}>
                 <IconButton 
                   onClick={this.handleFoldToggle}
                   className={isExpanded ? '' : 'active'}
