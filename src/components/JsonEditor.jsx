@@ -22,7 +22,7 @@ import {
   UnfoldLess as CollapseIcon,
   Delete as StripCommentsIcon,
   Compress as CompressIcon,
-  Code as EscapeIcon,
+  Code as CodeIcon,
   Description as XmlIcon,
   Code as TypeScriptIcon,
   Label as LabelIcon,
@@ -32,7 +32,9 @@ import {
   InsertDriveFile as FileIcon,
   History as HistoryIcon,
   CompareArrows as CompareIcon,
-  Filter as FilterIcon
+  Filter as FilterIcon,
+  TextFields as TextFieldsIcon,
+  Translate as TranslateIcon
 } from '@mui/icons-material'
 import { JsonService, FileService, EditorStateService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
@@ -101,6 +103,7 @@ class JsonEditor extends Component {
       modifiedValue: '',
       filterDrawerOpen: false,
       isExpanded: true, // 添加展开/折叠
+      isEscaped: false, // 添加转义状态
     }
 
     // 编辑器实例
@@ -683,7 +686,7 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 在文本中查找并格式化JSON部分，保留其他文本
+   * 在文本中查找并格式化JSON部分，留其他文本
    * @param {string} text - 输入文本
    * @returns {string} - 处理后的文本
    */
@@ -761,7 +764,7 @@ class JsonEditor extends Component {
       // 添加剩余的非JSON文本（保持原样）
       const remaining = text.slice(lastIndex);
       if (remaining) {
-        // 处理剩余文本，保留格式但去除多余空行
+        // 处理剩余���本，保留格式但去除多余空行
         const trimmedRemaining = remaining.replace(/\n{2,}/g, '\n').trimStart();
         // 如果前面有内容且不是以换行结尾，先添加换行
         if (result && !result.endsWith('\n') && trimmedRemaining) {
@@ -780,7 +783,7 @@ class JsonEditor extends Component {
 
   /**
    * 修复非标准JSON字符串
-   * @param {string} str - 需要修复���JSON字符串
+   * @param {string} str - 需要修复的JSON字符串
    * @returns {string} - 修复后的JSON字符串
    */
   fixJsonString = (str) => {
@@ -793,8 +796,8 @@ class JsonEditor extends Component {
         .replace(/\s*,\s*(?=[\s\n]*["}{\]])/g, '')  // 移除多余的逗号
         .replace(/\s*:\s*(?=[\s\n]*["}{\]])/g, '')  // 移除多余的冒号
         .replace(/(["}{\]])\s*,?\s*\n*\s*(["{{\[])/g, '$1,$2')  // 修复对象/数组之间的逗号
-        .replace(/\n\s*,\s*\n/g, ',\n')  // 修复换行中的逗号位置
-        .replace(/,(\s*[}\]])/g, '$1');  // 移除末尾多余的逗号
+        .replace(/\n\s*,\s*\n/g, ',\n')  // 修复换中的逗号位置
+        .replace(/,(\s*[}\]])/g, '$1');  // 移除尾多余的逗号
       
       // 2. 处理未加引号的键名（支持更多字符）
       processedStr = processedStr.replace(/([{,]\s*)([a-zA-Z0-9_$@\-/]+)\s*:/g, '$1"$2":');
@@ -826,7 +829,7 @@ class JsonEditor extends Component {
       const parsed = JSON.parse(processedStr);
       return this.customFormatJson(parsed);
     } catch (e) {
-      // 如果仍然无法解析，返回原始字符串
+      // 如果仍然无法解，返回原始字符串
       return str;
     }
   }
@@ -954,7 +957,7 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 压缩引号复制
+   * 压缩转义复制
    */
   handleCompressQuoteCopy = () => {
     try {
@@ -1211,80 +1214,42 @@ class JsonEditor extends Component {
    */
   listenPluginEnter = () => {
     window.utools.onPluginEnter(({ type, payload }) => {
-      console.log('Plugin enter:', type, payload);
-      
-      // 重置编辑器状态
-      this.setState({ 
-        placeholder: false, 
-        jsFilter: '',
-        messageData: null 
-      });
-      this.inputContentObject = null;
-
-      try {
-        // 处理不同类型的进入方式
-        if (type === 'regex' || type === 'over') {
-          // 从搜索栏或其他地方复制的内容
-          const content = payload.trim();
-          if (content) {
-            // 尝试格式化内容
-            const formattedContent = this.formatJsonInText(content);
-            
-            // 更新编辑器内容
-            if (this.inputEditor) {
-              this.inputEditor.setValue(formattedContent);
-              
-              // 自动保存到历史记录
-              if (window.fs && window.fs.saveEditorState) {
-                window.fs.saveEditorState(formattedContent, 'From uTools Search');
-              }
-            }
-          }
-        } else if (type === 'files') {
-          // 处理文件拖放
-          if (payload && payload.length > 0) {
-            const filePath = payload[0].path;
-            const content = window.services.readFileContent(filePath);
-            if (content && this.inputEditor) {
-              // 尝试格式化文件内容
-              const formattedContent = this.formatJsonInText(content);
-              this.inputEditor.setValue(formattedContent);
-            }
-          }
-        } else {
-          // 普通进入，检查编辑器是否有内容
-          const hasContent = this.inputEditor && this.inputEditor.getValue().trim();
-          this.setState({ placeholder: !hasContent });
-        }
-
-        // 确保编辑器获得焦点
-        if (this.inputEditor) {
-          requestAnimationFrame(() => {
-            this.inputEditor.focus();
-          });
-        }
-      } catch (error) {
-        console.error('处理插件进入事件失败:', error);
-        this.setState({ 
-          messageData: { 
-            type: 'error', 
-            message: '处理内容失败: ' + error.message 
-          } 
-        });
+      if (type === 'regex' || type === 'over') {
+        this.setState({ placeholder: false, jsFilter: '' })
+        this.inputContentObject = null
         
-        // 如果处理失败，保持原始内容
-        if (this.inputEditor && payload) {
+        try {
+          let content = payload.trim();
+          
+          // 尝试在文本中查找并格式化JSON部分，保留其他文本
+          content = this.formatJsonInText(content);
+          
+          this.inputEditor.setValue(content);
+          
+          if (window.fs && window.fs.saveEditorState) {
+            window.fs.saveEditorState(content, 'From uTools Search');
+          }
+        } catch (error) {
+          console.error('处理输入数据失败:', error);
           this.inputEditor.setValue(payload);
         }
+      } else if (type === 'files') {
+        this.setState({ placeholder: false, jsFilter: '' })
+        this.inputContentObject = null
+        this.inputEditor.setValue(window.services.readFileContent(payload[0].path))
+      } else {
+        const hasContent = this.inputEditor && this.inputEditor.getValue().trim()
+        this.setState({ placeholder: !hasContent })
       }
-    });
-  };
+      this.inputEditor.focus()
+    })
+  }
 
   /**
    * 处理键盘快捷键
    */
   handleKeyDown = (e) => {
-    // 获取操作系统信息
+    // 获取作系统信息
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
 
     // Ctrl/Command + S: 保存文件
@@ -1294,7 +1259,7 @@ class JsonEditor extends Component {
       return
     }
 
-    // Ctrl/Command + T: 切换标签输入框显示状态
+    // Ctrl/Command + T: 切换标签输入框显��状态
     if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 't') {
       e.preventDefault()
       this.handleLabelClick()
@@ -1315,17 +1280,17 @@ class JsonEditor extends Component {
       return
     }
 
-    // Alt + X: 转义
+    // Alt + X: 增加转义
     if (e.altKey && e.key === 'x') {
       e.preventDefault()
-      this.handleEscape()
+      this.handleAddEscape()
       return
     }
 
-    // Alt + U: 反转义
+    // Alt + U: 去除转义
     if (e.altKey && e.key === 'u') {
       e.preventDefault()
-      this.handleUnescape()
+      this.handleRemoveEscape()
       return
     }
 
@@ -1407,7 +1372,7 @@ class JsonEditor extends Component {
       const content = this.inputEditor.getValue();
       const jsonData = JSON.parse(content);
       
-      // 根据路径查找位置
+      // 根据径查找位置
       const pathParts = path.split('.');
       let currentObj = jsonData;
       let found = true;
@@ -1491,6 +1456,88 @@ class JsonEditor extends Component {
   };
 
   /**
+   * 处理增加转义
+   */
+  handleAddEscape = () => {
+    try {
+      const value = this.inputEditor.getValue();
+      if (!value.trim()) {
+        return;
+      }
+
+      // 执行增加转义
+      let escaped = value;
+      
+      // 先处理反斜杠，再处理其他字符
+      escaped = escaped
+        .replace(/\\/g, '\\\\')    // 处理反斜杠（必须先处理）
+        .replace(/"/g, '\\"')      // 处理引号
+        .replace(/\n/g, '\\n')     // 处理换行
+        .replace(/\r/g, '\\r')     // 处理回车
+        .replace(/\t/g, '\\t')     // 处理制表符
+        .replace(/[\b]/g, '\\b')   // 处理退格符
+        .replace(/\f/g, '\\f');    // 处理换页符
+
+      this.inputEditor.setValue(escaped);
+      
+      this.setState({ 
+        messageData: { 
+          type: 'success', 
+          message: '增加转义成功' 
+        } 
+      });
+    } catch (e) {
+      console.error('增加转义失败:', e);
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '增加转义失败: ' + e.message 
+        } 
+      });
+    }
+  }
+
+  /**
+   * 处理去除转义
+   */
+  handleRemoveEscape = () => {
+    try {
+      const value = this.inputEditor.getValue();
+      if (!value.trim()) {
+        return;
+      }
+
+      // 执行去除转义
+      const unescaped = value
+        .replace(/\\\\"/g, '\\"')  // 处理双重转义的引号
+        .replace(/\\"/g, '"')      // 处理转义的引号
+        .replace(/\\\\/g, '\\')    // 处理转义的反斜杠
+        .replace(/\\n/g, '\n')     // 处理换行转义
+        .replace(/\\r/g, '\r')     // 处理回车转义
+        .replace(/\\t/g, '\t')     // 处理制表符转义
+        .replace(/\\b/g, '\b')     // 处理退格符转义
+        .replace(/\\f/g, '\f');    // 处理换页符转义
+
+      this.inputEditor.setValue(unescaped);
+      
+      this.setState({ 
+        messageData: { 
+          type: 'success', 
+          message: '去除转义成功' 
+        } 
+      });
+    } catch (e) {
+      console.error('去除转义失败:', e);
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '去除转义失败: ' + e.message 
+        } 
+      });
+    }
+  }
+
+  /**
    * 渲染组件
    * @returns {JSX.Element} 渲染的React组件
    */
@@ -1568,20 +1615,6 @@ class JsonEditor extends Component {
 
               <Divider orientation="vertical" flexItem />
 
-              <Tooltip title="压缩复制「Alt + C」">
-                <IconButton onClick={this.handleCompressCopy}>
-                  <CompressIcon />
-                </IconButton>
-              </Tooltip>
-
-              <Tooltip title="压缩引号复制「Alt + \」">
-                <IconButton onClick={this.handleCompressQuoteCopy}>
-                  <EscapeIcon />
-                </IconButton>
-              </Tooltip>
-
-              <Divider orientation="vertical" flexItem />
-
               <Tooltip title="添加标签「Ctrl/⌘ + T」">
                 <IconButton 
                   onClick={this.handleLabelClick}
@@ -1632,6 +1665,32 @@ class JsonEditor extends Component {
                   className={filterDrawerOpen ? 'active' : ''}
                 >
                   <FilterIcon />
+                </IconButton>
+              </Tooltip>
+
+              <Divider orientation="vertical" flexItem />
+
+              <Tooltip title="压缩复制「Alt + C」">
+                <IconButton onClick={this.handleCompressCopy}>
+                  <CompressIcon />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="压缩转义复制「Alt + \」">
+                <IconButton onClick={this.handleCompressQuoteCopy}>
+                  <CodeIcon />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="增加转义「Alt + X」">
+                <IconButton onClick={this.handleAddEscape}>
+                  <TranslateIcon />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="去除转义「Alt + U」">
+                <IconButton onClick={this.handleRemoveEscape}>
+                  <TextFieldsIcon />
                 </IconButton>
               </Tooltip>
             </div>
@@ -1700,7 +1759,7 @@ class JsonEditor extends Component {
       error: error,
       messageData: { 
         type: 'error', 
-        message: `发生错误: ${error.message}` 
+        message: `发生��误: ${error.message}` 
       }
     })
     console.error('Error:', error, errorInfo)
