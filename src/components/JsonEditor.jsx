@@ -612,7 +612,7 @@ class JsonEditor extends Component {
 
         // 更新编辑器内容
         this.inputEditor.setValue(formattedResult);
-        console.log('��更新编辑器内容');
+        console.log('更新编辑器内容');
 
         // 清除错误消息
         this.setState({ messageData: null });
@@ -780,7 +780,7 @@ class JsonEditor extends Component {
 
   /**
    * 修复非标准JSON字符串
-   * @param {string} str - 需要修复的JSON字符串
+   * @param {string} str - 需要修复���JSON字符串
    * @returns {string} - 修复后的JSON字符串
    */
   fixJsonString = (str) => {
@@ -1211,36 +1211,74 @@ class JsonEditor extends Component {
    */
   listenPluginEnter = () => {
     window.utools.onPluginEnter(({ type, payload }) => {
-      if (type === 'regex' || type === 'over') {
-        this.setState({ placeholder: false, jsFilter: '' })
-        this.inputContentObject = null
-        
-        try {
-          let content = payload.trim();
-          
-          // 尝试在文本中查找并格式化JSON部分，保留其他文本
-          content = this.formatJsonInText(content);
-          
-          this.inputEditor.setValue(content);
-          
-          if (window.fs && window.fs.saveEditorState) {
-            window.fs.saveEditorState(content, 'From uTools Search');
+      console.log('Plugin enter:', type, payload);
+      
+      // 重置编辑器状态
+      this.setState({ 
+        placeholder: false, 
+        jsFilter: '',
+        messageData: null 
+      });
+      this.inputContentObject = null;
+
+      try {
+        // 处理不同类型的进入方式
+        if (type === 'regex' || type === 'over') {
+          // 从搜索栏或其他地方复制的内容
+          const content = payload.trim();
+          if (content) {
+            // 尝试格式化内容
+            const formattedContent = this.formatJsonInText(content);
+            
+            // 更新编辑器内容
+            if (this.inputEditor) {
+              this.inputEditor.setValue(formattedContent);
+              
+              // 自动保存到历史记录
+              if (window.fs && window.fs.saveEditorState) {
+                window.fs.saveEditorState(formattedContent, 'From uTools Search');
+              }
+            }
           }
-        } catch (error) {
-          console.error('处理输入数据失败:', error);
+        } else if (type === 'files') {
+          // 处理文件拖放
+          if (payload && payload.length > 0) {
+            const filePath = payload[0].path;
+            const content = window.services.readFileContent(filePath);
+            if (content && this.inputEditor) {
+              // 尝试格式化文件内容
+              const formattedContent = this.formatJsonInText(content);
+              this.inputEditor.setValue(formattedContent);
+            }
+          }
+        } else {
+          // 普通进入，检查编辑器是否有内容
+          const hasContent = this.inputEditor && this.inputEditor.getValue().trim();
+          this.setState({ placeholder: !hasContent });
+        }
+
+        // 确保编辑器获得焦点
+        if (this.inputEditor) {
+          requestAnimationFrame(() => {
+            this.inputEditor.focus();
+          });
+        }
+      } catch (error) {
+        console.error('处理插件进入事件失败:', error);
+        this.setState({ 
+          messageData: { 
+            type: 'error', 
+            message: '处理内容失败: ' + error.message 
+          } 
+        });
+        
+        // 如果处理失败，保持原始内容
+        if (this.inputEditor && payload) {
           this.inputEditor.setValue(payload);
         }
-      } else if (type === 'files') {
-        this.setState({ placeholder: false, jsFilter: '' })
-        this.inputContentObject = null
-        this.inputEditor.setValue(window.services.readFileContent(payload[0].path))
-      } else {
-        const hasContent = this.inputEditor && this.inputEditor.getValue().trim()
-        this.setState({ placeholder: !hasContent })
       }
-      this.inputEditor.focus()
-    })
-  }
+    });
+  };
 
   /**
    * 处理键盘快捷键
