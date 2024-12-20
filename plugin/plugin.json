@@ -13,8 +13,8 @@
         "Json",
         {
           "type": "regex",
-          "minLength": 2,
-          "match": "/.*?({[\\s\\S]*?}|\\[[\\s\\S]*?\\])/",
+          "minLength": 1,
+          "match": "/\\s*[{\\[]([\\s\\S]*?[}\\]]\\s*$|[\\s\\S]*$)/",
           "label": "Json"
         },
         {

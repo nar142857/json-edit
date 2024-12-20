@@ -212,15 +212,27 @@ class JsonEditor extends Component {
    * 组件挂载后初始化编辑器
    */
   componentDidMount() {
-    // 使用 requestAnimationFrame 确保 DOM 已经准备好
-    requestAnimationFrame(() => {
-      if (this.editorRef.current) {
-        this.initMonacoEditor();
-        // 在编辑器初始化后添加事件监听
-        this.listenPaste();
-        window.addEventListener('keydown', this.handleKeyDown);
-        this.listenPluginEnter();
-      }
+    // 使用 Promise 确保编辑器初始化完成
+    const initEditor = () => {
+      return new Promise((resolve) => {
+        const checkEditor = () => {
+          if (this.editorRef.current) {
+            this.initMonacoEditor();
+            resolve();
+          } else {
+            requestAnimationFrame(checkEditor);
+          }
+        };
+        checkEditor();
+      });
+    };
+
+    // 初始化编辑器并添加事件监听
+    initEditor().then(() => {
+      this.listenPaste();
+      window.addEventListener('keydown', this.handleKeyDown);
+      this.listenPluginEnter();
+      console.log('Editor initialized and events bound');
     });
   }
 
@@ -764,7 +776,7 @@ class JsonEditor extends Component {
       // 添加剩余的非JSON文本（保持原样）
       const remaining = text.slice(lastIndex);
       if (remaining) {
-        // 处理剩余���本，保留格式但去除多余空行
+        // 处理剩余本，保留格式但去除多余空行
         const trimmedRemaining = remaining.replace(/\n{2,}/g, '\n').trimStart();
         // 如果前面有内容且不是以换行结尾，先添加换行
         if (result && !result.endsWith('\n') && trimmedRemaining) {
@@ -796,7 +808,7 @@ class JsonEditor extends Component {
         .replace(/\s*,\s*(?=[\s\n]*["}{\]])/g, '')  // 移除多余的逗号
         .replace(/\s*:\s*(?=[\s\n]*["}{\]])/g, '')  // 移除多余的冒号
         .replace(/(["}{\]])\s*,?\s*\n*\s*(["{{\[])/g, '$1,$2')  // 修复对象/数组之间的逗号
-        .replace(/\n\s*,\s*\n/g, ',\n')  // 修复换中的逗号位置
+        .replace(/\n\s*,\s*\n/g, ',\n')  // 修复换行的逗号位置
         .replace(/,(\s*[}\]])/g, '$1');  // 移除尾多余的逗号
       
       // 2. 处理未加引号的键名（支持更多字符）
@@ -1214,36 +1226,61 @@ class JsonEditor extends Component {
    */
   listenPluginEnter = () => {
     window.utools.onPluginEnter(({ type, payload }) => {
+      console.log('Plugin Enter:', type, payload);
+      
       if (type === 'regex' || type === 'over') {
-        this.setState({ placeholder: false, jsFilter: '' })
-        this.inputContentObject = null
+        this.setState({ placeholder: false, jsFilter: '' });
+        this.inputContentObject = null;
         
         try {
           let content = payload.trim();
+          console.log('Original content:', content);
           
-          // 尝试在文本中查找并格式化JSON部分，保留其他文本
+          // 尝试在文本中查找并格式化JSON部分
           content = this.formatJsonInText(content);
+          console.log('Formatted content:', content);
           
-          this.inputEditor.setValue(content);
-          
-          if (window.fs && window.fs.saveEditorState) {
-            window.fs.saveEditorState(content, 'From uTools Search');
+          // 设置编辑器内容
+          if (this.inputEditor) {
+            this.inputEditor.setValue(content);
+            
+            // 格式化内容
+            requestAnimationFrame(() => {
+              this.handleReFormat();
+              // 确保编辑器获得焦点
+              this.inputEditor.focus();
+            });
+            
+            // 保存到历史记录
+            if (window.fs && window.fs.saveEditorState) {
+              window.fs.saveEditorState(content, 'From uTools Search');
+            }
+          } else {
+            console.error('Editor not initialized');
           }
         } catch (error) {
           console.error('处理输入数据失败:', error);
-          this.inputEditor.setValue(payload);
+          if (this.inputEditor) {
+            this.inputEditor.setValue(payload);
+            this.inputEditor.focus();
+          }
         }
       } else if (type === 'files') {
-        this.setState({ placeholder: false, jsFilter: '' })
-        this.inputContentObject = null
-        this.inputEditor.setValue(window.services.readFileContent(payload[0].path))
+        this.setState({ placeholder: false, jsFilter: '' });
+        this.inputContentObject = null;
+        if (this.inputEditor) {
+          this.inputEditor.setValue(window.services.readFileContent(payload[0].path));
+          this.inputEditor.focus();
+        }
       } else {
-        const hasContent = this.inputEditor && this.inputEditor.getValue().trim()
-        this.setState({ placeholder: !hasContent })
+        if (this.inputEditor) {
+          const hasContent = this.inputEditor.getValue().trim();
+          this.setState({ placeholder: !hasContent });
+          this.inputEditor.focus();
+        }
       }
-      this.inputEditor.focus()
-    })
-  }
+    });
+  };
 
   /**
    * 处理键盘快捷键
@@ -1259,7 +1296,7 @@ class JsonEditor extends Component {
       return
     }
 
-    // Ctrl/Command + T: 切换标签输入框显��状态
+    // Ctrl/Command + T: 切换标签输入框显状态
     if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 't') {
       e.preventDefault()
       this.handleLabelClick()
@@ -1474,7 +1511,7 @@ class JsonEditor extends Component {
         .replace(/"/g, '\\"')      // 处理引号
         .replace(/\n/g, '\\n')     // 处理换行
         .replace(/\r/g, '\\r')     // 处理回车
-        .replace(/\t/g, '\\t')     // 处理制表符
+        .replace(/\t/g, '\\t')     // 处理��表符
         .replace(/[\b]/g, '\\b')   // 处理退格符
         .replace(/\f/g, '\\f');    // 处理换页符
 
@@ -1759,7 +1796,7 @@ class JsonEditor extends Component {
       error: error,
       messageData: { 
         type: 'error', 
-        message: `发生��误: ${error.message}` 
+        message: `发生误: ${error.message}` 
       }
     })
     console.error('Error:', error, errorInfo)

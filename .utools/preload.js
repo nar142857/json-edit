@@ -6,6 +6,15 @@ const url = require('url')
 
 window.ipc = ipcRenderer
 
+window.clipboard = {
+  getText() {
+    return window.utools.copyText()
+  },
+  setText(text) {
+    window.utools.copyText(text)
+  }
+}
+
 window.fs = {
   async saveFileToPath(buffer, filename, ext, fileType, title) {
     ext = Array.isArray(ext) ? ext : [ext]
