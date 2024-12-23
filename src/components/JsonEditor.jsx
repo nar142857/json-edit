@@ -1534,29 +1534,39 @@ class JsonEditor extends Component {
       }
 
       // 使用JsonFixer修复JSON
-      const fixedJson = JsonFixer.fixJsonString(value);
+      const result = JsonFixer.fixJsonString(value);
       
-      // 如果修复前后内容相同，显示提示
-      if (value === fixedJson) {
+      if (result.success) {
+        // 如果修复前后内容相同，显示提示
+        if (value === result.result) {
+          this.setState({ 
+            messageData: { 
+              type: 'info', 
+              message: 'JSON无需修复' 
+            } 
+          });
+          return;
+        }
+
+        // 打开对比编辑器，显示修复前后的差异
+        this.setState({
+          isDiffMode: true,
+          originalValue: value,        // 左侧显示原始内容
+          modifiedValue: result.result, // 右侧显示修复后的内容
+          messageData: { 
+            type: 'success', 
+            message: 'JSON修复完成，请查看对比结果' 
+          }
+        });
+      } else {
+        // 修复失败，显示错误信息
         this.setState({ 
           messageData: { 
-            type: 'info', 
-            message: 'JSON无需修复' 
+            type: 'error', 
+            message: result.error 
           } 
         });
-        return;
       }
-
-      // 打开对比编辑器，显示修复前后的差异
-      this.setState({
-        isDiffMode: true,
-        originalValue: value,      // 左侧显示原始内容
-        modifiedValue: fixedJson,  // 右侧显示修复后的内容
-        messageData: { 
-          type: 'success', 
-          message: 'JSON修复完成，请查看对比结果' 
-        }
-      });
     } catch (e) {
       console.error('修复JSON失败:', e);
       this.setState({ 

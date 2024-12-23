@@ -8,7 +8,7 @@ class JsonFixer {
   /**
    * 修复非标准JSON字符串
    * @param {string} str - 需要修复的JSON字符串
-   * @returns {string} - 修复后的JSON字符串
+   * @returns {object} - 返回包含修复结果和错误信息的对象
    */
   static fixJsonString = (str) => {
     try {
@@ -40,72 +40,184 @@ class JsonFixer {
         .replace(/　/g, ' ');    // 全角空格
       console.log('预处理后:', processedStr);
 
-      // 2. 处理转义字符
-      console.log('2. 处理转义字符...');
-      try {
-        // 如果字符串包含转义字符，尝试解析它
-        if (processedStr.includes('\\')) {
-          processedStr = JSON.parse('"' + processedStr.replace(/^"|"$/g, '').replace(/\\"/g, '"') + '"');
-        }
-      } catch (e) {
-        console.log('处理转义字符失败，继续其他修复:', e.message);
-      }
-      console.log('处理转义字符后:', processedStr);
+      // 2. 处理错误的对象结构
+      console.log('2. 处理错误的对象结构...');
+      let tokens = [];
+      let currentToken = '';
+      let inString = false;
+      let inValue = false;
+      let depth = 0;
 
-      // 3. 处理多余的逗号
-      console.log('3. 处理多余的逗号...');
+      // 标记化JSON字符串
+      for (let i = 0; i < processedStr.length; i++) {
+        let char = processedStr[i];
+        
+        if (char === '"' && processedStr[i-1] !== '\\') {
+          inString = !inString;
+          currentToken += char;
+          continue;
+        }
+        
+        if (inString) {
+          currentToken += char;
+          continue;
+        }
+
+        if (char === '{') {
+          if (depth > 0 && !inValue) {
+            // 如果在对象内部遇到新的{，且不在值中，说明这是一个错误的嵌套
+            // 将其替换为逗号
+            char = ',';
+          }
+          depth++;
+          if (currentToken) tokens.push(currentToken);
+          tokens.push(char);
+          currentToken = '';
+          inValue = false;
+        } else if (char === '}') {
+          depth--;
+          if (currentToken) tokens.push(currentToken);
+          tokens.push(char);
+          currentToken = '';
+          inValue = false;
+        } else if (char === ':') {
+          if (currentToken) tokens.push(currentToken);
+          tokens.push(char);
+          currentToken = '';
+          inValue = true;
+        } else if (char === ',') {
+          if (currentToken) tokens.push(currentToken);
+          tokens.push(char);
+          currentToken = '';
+          inValue = false;
+        } else if (!char.trim()) {
+          if (currentToken) {
+            tokens.push(currentToken);
+            currentToken = '';
+          }
+        } else {
+          currentToken += char;
+        }
+      }
+      if (currentToken) tokens.push(currentToken);
+
+      // 重建JSON字符串
+      processedStr = '';
+      let lastToken = '';
+      for (let i = 0; i < tokens.length; i++) {
+        let token = tokens[i].trim();
+        if (!token) continue;
+
+        // 处理连续的逗号
+        if (token === ',' && lastToken === ',') continue;
+        
+        // 处理对象开始前的逗号
+        if (token === '{' && lastToken === ',') {
+          processedStr = processedStr.slice(0, -1);
+        }
+        
+        // 处理值之间的分隔
+        if (lastToken && !(lastToken === '{' || lastToken === ',' || lastToken === ':' || token === '}' || token === ',' || token === ':')) {
+          processedStr += ',';
+        }
+        
+        processedStr += token;
+        lastToken = token;
+      }
+      console.log('处理对象结构后:', processedStr);
+
+      // 3. 处理括号匹配
+      console.log('3. 处理括号匹配...');
+      let stack = [];
+      let chars = processedStr.split('');
+      let validBrackets = '';
+      inString = false;
+
+      for (let i = 0; i < chars.length; i++) {
+        let char = chars[i];
+        
+        if (char === '"' && chars[i-1] !== '\\') {
+          inString = !inString;
+          validBrackets += char;
+          continue;
+        }
+        
+        if (inString) {
+          validBrackets += char;
+          continue;
+        }
+
+        if (char === '{' || char === '[') {
+          stack.push(char);
+          validBrackets += char;
+        } else if (char === '}' || char === ']') {
+          if (stack.length === 0) {
+            continue;
+          }
+          let last = stack.pop();
+          if ((char === '}' && last === '{') || (char === ']' && last === '[')) {
+            validBrackets += char;
+          }
+        } else {
+          validBrackets += char;
+        }
+      }
+
+      while (stack.length > 0) {
+        let bracket = stack.pop();
+        validBrackets += bracket === '{' ? '}' : ']';
+      }
+
+      processedStr = validBrackets;
+      console.log('处理括号后:', processedStr);
+
+      // 4. 处理多余的逗号
+      console.log('4. 处理多余的逗号...');
       processedStr = processedStr
-        // 移除对象末尾的逗号
-        .replace(/,(\s*})/g, '$1')
-        // 移除数组末尾的逗号
-        .replace(/,(\s*\])/g, '$1')
-        // 移除多余的空行
+        .replace(/,(\s*[}\]])/g, '$1')
+        .replace(/,\s*,/g, ',')
         .replace(/\n\s*\n/g, '\n');
       console.log('处理逗号后:', processedStr);
 
-      // 4. 修复基本语法错误
-      console.log('4. 修复基本语法错误...');
+      // 5. 修复基本语法错误
+      console.log('5. 修复基本语法错误...');
       processedStr = processedStr
-        // 处理缺少引号的键名
         .replace(/([{,]\s*)([a-zA-Z0-9_$@\-/]+)(\s*):/g, '$1"$2"$3:')
-        // 处理单引号
         .replace(/'([^']*)'(\s*[,}\]])/g, '"$1"$2')
         .replace(/'([^']*)'(\s*:)/g, '"$1"$2')
         .replace(/:\s*'([^']*)'/g, ': "$1"')
-        // 修复错误的布尔值和null写法
         .replace(/:\s*True\b/gi, ': true')
         .replace(/:\s*False\b/gi, ': false')
         .replace(/:\s*None\b/gi, ': null')
         .replace(/:\s*undefined\b/gi, ': null')
         .replace(/:\s*NaN\b/g, ': null')
-        // 处理数值周围不必要的引号
         .replace(/"(-?\d+\.?\d*)"(\s*[,}\]])/g, '$1$2');
       console.log('修复基本语法错误后:', processedStr);
 
-      // 5. 尝试解析和格式化
-      console.log('5. 尝试解析和格式化...');
+      // 6. 尝试解析和格式化
+      console.log('6. 尝试解析和格式化...');
       try {
         const parsed = JSON.parse(processedStr);
-        return JSON.stringify(parsed, null, 2);
+        return {
+          success: true,
+          result: JSON.stringify(parsed, null, 2),
+          error: null
+        };
       } catch (e) {
         console.log('首次解析失败，进行最后的修复:', e.message);
         
         // 最后的修复尝试
         processedStr = processedStr
-          // 处理转义字符
           .replace(/\\\\/g, '\\')
           .replace(/\\"/g, '"')
           .replace(/\\n/g, '\n')
           .replace(/\\r/g, '\r')
           .replace(/\\t/g, '\t')
-          // 确保属性之间有逗号
           .replace(/}(\s*){/g, '},{')
           .replace(/](\s*)\[/g, '],[')
-          // 移除多余的逗号
           .replace(/,(\s*[}\]])/g, '$1')
           .replace(/,\s*,/g, ',')
           .replace(/,\s*$/g, '')
-          // 再次尝试处理全角字符
           .replace(/[，：｛｝［］＂＇（）／＼～｜　]/g, char => {
             const map = {
               '，': ',', '：': ':', '｛': '{', '｝': '}',
@@ -120,22 +232,42 @@ class JsonFixer {
         
         try {
           const parsed = JSON.parse(processedStr);
-          return JSON.stringify(parsed, null, 2);
+          return {
+            success: true,
+            result: JSON.stringify(parsed, null, 2),
+            error: null
+          };
         } catch (e) {
           console.log('所有修复尝试都失败:', e.message);
-          // 如果所有尝试都失败，尝试eval
-          try {
-            const evalResult = eval('(' + processedStr + ')');
-            return JSON.stringify(evalResult, null, 2);
-          } catch (e) {
-            console.log('eval尝试也失败:', e.message);
-            return str;
+          let errorMessage = '无法修复JSON，错误原因：';
+          if (e.message.includes('Unexpected token')) {
+            errorMessage += '发现意外的字符';
+            if (e.message.includes('position')) {
+              const position = e.message.match(/position (\d+)/)[1];
+              const context = processedStr.substring(Math.max(0, position - 10), Math.min(processedStr.length, position + 10));
+              errorMessage += `，问题出现在第 ${position} 个字符附近: "${context}"`;
+            }
+          } else if (e.message.includes('Expected')) {
+            errorMessage += e.message.replace('Expected', '缺少').replace('after', '在');
+          } else if (e.message.includes('non-whitespace character after JSON')) {
+            errorMessage += '在JSON结束后发现多余的字符';
+          } else {
+            errorMessage += e.message;
           }
+          return {
+            success: false,
+            result: str,
+            error: errorMessage
+          };
         }
       }
     } catch (e) {
       console.error('JSON修复过程出错:', e.message);
-      return str;
+      return {
+        success: false,
+        result: str,
+        error: '修复过程出错：' + e.message
+      };
     }
   }
 }
