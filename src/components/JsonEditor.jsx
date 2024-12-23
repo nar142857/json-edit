@@ -34,7 +34,8 @@ import {
   CompareArrows as CompareIcon,
   Filter as FilterIcon,
   TextFields as TextFieldsIcon,
-  Translate as TranslateIcon
+  Translate as TranslateIcon,
+  Build as BuildIcon
 } from '@mui/icons-material'
 import { JsonService, FileService, EditorStateService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
@@ -42,6 +43,7 @@ import './JsonEditor.css'
 import { debounce } from 'lodash'
 import DiffEditor from './DiffEditor'
 import JsonFilter from './JsonFilter'
+import JsonFixer from './JsonFixer'
 
 // 创建暗色主题
 const darkTheme = createTheme({
@@ -329,7 +331,7 @@ class JsonEditor extends Component {
    * 切换差异对比模式
    */
   toggleDiffMode = () => {
-    const { isDiffMode } = this.state
+    const { isDiffMode, originalValue, modifiedValue } = this.state
     
     if (!isDiffMode) {
       // 进入对比模式，左侧显示当前编辑器内容，右侧为空
@@ -340,9 +342,7 @@ class JsonEditor extends Component {
         modifiedValue: ''  // 右侧初始为空，等待用户输入
       })
     } else {
-      // 退出对比模式，使用左侧的内容恢复编辑器
-      const { originalValue } = this.state
-      
+      // 退出对比模式，使用右侧（修复后）的内容恢复编辑器
       this.setState({
         isDiffMode: false,
         originalValue: '',
@@ -351,9 +351,11 @@ class JsonEditor extends Component {
         // 重新初始化编辑器
         if (this.editorRef.current) {
           this.initMonacoEditor()
-          // 设置编辑器内容为左侧的内容
+          // 设置编辑器内容为右侧（修复后）的内容
           if (this.inputEditor) {
-            this.inputEditor.setValue(originalValue)
+            // 如果有修复后的内容，使用修复后的内容；否则使用原始内容
+            const contentToRestore = modifiedValue || originalValue;
+            this.inputEditor.setValue(contentToRestore)
             // 确保编辑器获得焦点
             requestAnimationFrame(() => {
               this.inputEditor.focus()
@@ -756,7 +758,7 @@ class JsonEditor extends Component {
             jsonPart = this.customFormatJson(parsed);
           } catch (e) {
             // 如果解析失败，尝试修复非标准JSON
-            jsonPart = this.fixJsonString(jsonPart);
+            jsonPart = JsonFixer.fixJsonString(jsonPart);
           }
           
           result += jsonPart;
@@ -790,59 +792,6 @@ class JsonEditor extends Component {
     } catch (e) {
       console.error('格式化JSON文本失败:', e);
       return text;
-    }
-  }
-
-  /**
-   * 修复非标准JSON字符串
-   * @param {string} str - 需要修复的JSON字符串
-   * @returns {string} - 修复后的JSON字符串
-   */
-  fixJsonString = (str) => {
-    try {
-      let processedStr = str;
-      
-      // 1. 处理不规范的格式
-      processedStr = processedStr
-        // 处理独立的逗号和冒号
-        .replace(/\s*,\s*(?=[\s\n]*["}{\]])/g, '')  // 移除多余的逗号
-        .replace(/\s*:\s*(?=[\s\n]*["}{\]])/g, '')  // 移除多余的冒号
-        .replace(/(["}{\]])\s*,?\s*\n*\s*(["{{\[])/g, '$1,$2')  // 修复对象/数组之间的逗号
-        .replace(/\n\s*,\s*\n/g, ',\n')  // 修复换行的逗号位置
-        .replace(/,(\s*[}\]])/g, '$1');  // 移除尾多余的逗号
-      
-      // 2. 处理未加引号的键名（支持更多字符）
-      processedStr = processedStr.replace(/([{,]\s*)([a-zA-Z0-9_$@\-/]+)\s*:/g, '$1"$2":');
-      
-      // 3. 处理单引号包裹的字符串
-      processedStr = processedStr.replace(/'([^']*)'(?=\s*[,}\]])/g, '"$1"');
-      
-      // 4. 处理错误的布尔值和null写法
-      processedStr = processedStr
-        .replace(/:\s*True\b/g, ': true')
-        .replace(/:\s*False\b/g, ': false')
-        .replace(/:\s*None\b/g, ': null');
-      
-      // 5. 处理数值周围不必要的引号
-      processedStr = processedStr.replace(/"(-?\d+\.?\d*)"(?=\s*[,}\]])/g, '$1');
-      
-      // 6. 处理版本号格式（如 ^7.23.3）
-      processedStr = processedStr.replace(/"(\^?\d+\.\d+\.\d+)"(?=\s*[,}\]])/g, '"$1"');
-      
-      // 7. 处理特殊字符转义
-      processedStr = processedStr
-        .replace(/\\n/g, '\n')
-        .replace(/\\t/g, '\t')
-        .replace(/\\r/g, '\r')
-        .replace(/\\\\/g, '\\')
-        .replace(/\\"/g, '"');
-      
-      // 8. 验证修复后的JSON是否有效
-      const parsed = JSON.parse(processedStr);
-      return this.customFormatJson(parsed);
-    } catch (e) {
-      // 如果仍然无法解，返回原始字符串
-      return str;
     }
   }
 
@@ -1409,7 +1358,7 @@ class JsonEditor extends Component {
       const content = this.inputEditor.getValue();
       const jsonData = JSON.parse(content);
       
-      // 根据径查找位置
+      // 根据径查找置
       const pathParts = path.split('.');
       let currentObj = jsonData;
       let found = true;
@@ -1424,7 +1373,7 @@ class JsonEditor extends Component {
       }
       
       if (found) {
-        // 获取目标文本在编辑器中的位置
+        // 获取标文本在编辑器中的位置
         const model = this.inputEditor.getModel();
         const text = model.getValue();
         const lines = text.split('\n');
@@ -1511,7 +1460,7 @@ class JsonEditor extends Component {
         .replace(/"/g, '\\"')      // 处理引号
         .replace(/\n/g, '\\n')     // 处理换行
         .replace(/\r/g, '\\r')     // 处理回车
-        .replace(/\t/g, '\\t')     // 处理��表符
+        .replace(/\t/g, '\\t')     // 处理制表符
         .replace(/[\b]/g, '\\b')   // 处理退格符
         .replace(/\f/g, '\\f');    // 处理换页符
 
@@ -1569,6 +1518,51 @@ class JsonEditor extends Component {
         messageData: { 
           type: 'error', 
           message: '去除转义失败: ' + e.message 
+        } 
+      });
+    }
+  }
+
+  /**
+   * 处理修复JSON
+   */
+  handleFixJson = () => {
+    try {
+      const value = this.inputEditor.getValue();
+      if (!value.trim()) {
+        return;
+      }
+
+      // 使用JsonFixer修复JSON
+      const fixedJson = JsonFixer.fixJsonString(value);
+      
+      // 如果修复前后内容相同，显示提示
+      if (value === fixedJson) {
+        this.setState({ 
+          messageData: { 
+            type: 'info', 
+            message: 'JSON无需修复' 
+          } 
+        });
+        return;
+      }
+
+      // 打开对比编辑器，显示修复前后的差异
+      this.setState({
+        isDiffMode: true,
+        originalValue: value,      // 左侧显示原始内容
+        modifiedValue: fixedJson,  // 右侧显示修复后的内容
+        messageData: { 
+          type: 'success', 
+          message: 'JSON修复完成，请查看对比结果' 
+        }
+      });
+    } catch (e) {
+      console.error('修复JSON失败:', e);
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: 'JSON修复失败: ' + e.message 
         } 
       });
     }
@@ -1638,6 +1632,12 @@ class JsonEditor extends Component {
               <Tooltip title="重新格式化「Alt + F」">
                 <IconButton onClick={this.handleReFormat}>
                   <FormatIcon />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="修复JSON">
+                <IconButton onClick={this.handleFixJson}>
+                  <BuildIcon />
                 </IconButton>
               </Tooltip>
 
