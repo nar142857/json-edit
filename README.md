@@ -241,6 +241,7 @@ Monaco Editor 会自动高亮显示差异
 ![alt text](image-3.png)
 ![筛选](image-4.png)
 ![差异对比](image-5.png)
+![json修复](image-6.png)
 
 
 ## 最新更新 (2024-12-16)

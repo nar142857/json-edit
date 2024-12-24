@@ -601,7 +601,7 @@ class JsonEditor extends Component {
 
           filterFunction = new Function('json', `
             try {
-              console.log('执行过滤函数，输入数据:', json);
+              console.log('执行过滤函数，输入数:', json);
               const result = ${processedExpression};
               console.log('过滤结果:', result);
               return result;
@@ -1524,59 +1524,43 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 处理修复JSON
+   * 处理修复JSON按钮点击事件
    */
-  handleFixJson = () => {
+  handleFixJson = async () => {
     try {
-      const value = this.inputEditor.getValue();
-      if (!value.trim()) {
-        return;
-      }
+      const currentValue = this.inputEditor?.getValue() || '';
+      const result = await JsonFixer.fixJsonString(currentValue);
 
-      // 使用JsonFixer修复JSON
-      const result = JsonFixer.fixJsonString(value);
-      
       if (result.success) {
-        // 如果修复前后内容相同，显示提示
-        if (value === result.result) {
-          this.setState({ 
-            messageData: { 
-              type: 'info', 
-              message: 'JSON无需修复' 
-            } 
-          });
-          return;
-        }
-
-        // 打开对比编辑器，显示修复前后的差异
+        // 保存原始和修复后的内容
         this.setState({
-          isDiffMode: true,
-          originalValue: value,        // 左侧显示原始内容
-          modifiedValue: result.result, // 右侧显示修复后的内容
-          messageData: { 
-            type: 'success', 
-            message: 'JSON修复完成，请查看对比结果' 
+          originalValue: currentValue,
+          modifiedValue: result.result,
+          isDiffMode: result.isDiffMode,
+          messageData: {
+            type: result.isDiffMode ? 'success' : 'info',
+            message: result.isDiffMode ? 'JSON修复成功，请在对比视图中查看修复结果' : '标准JSON，无需修复'
           }
         });
       } else {
-        // 修复失败，显示错误信息
-        this.setState({ 
-          messageData: { 
-            type: 'error', 
-            message: result.error 
-          } 
+        // 显示错误提示
+        this.setState({
+          messageData: {
+            type: 'error',
+            message: result.error || '修复失败，请检查JSON格式'
+          }
         });
       }
-    } catch (e) {
-      console.error('修复JSON失败:', e);
-      this.setState({ 
-        messageData: { 
-          type: 'error', 
-          message: 'JSON修复失败: ' + e.message 
-        } 
+    } catch (error) {
+      console.error('修复JSON时出错:', error);
+      this.setState({
+        messageData: {
+          type: 'error',
+          message: '修复过程出错: ' + error.message
+        }
       });
     }
-  }
+  };
 
   /**
    * 渲染组件
@@ -1651,7 +1635,7 @@ class JsonEditor extends Component {
                 </IconButton>
               </Tooltip>
 
-              <Tooltip title={isExpanded ? "全部折叠「Alt + ." : "全部展开「Alt + . + Shift」"}>
+              <Tooltip title={isExpanded ? "全部折叠「Alt + .」" : "全部展开「Alt + . + Shift」"}>
                 <IconButton 
                   onClick={this.handleFoldToggle}
                   className={isExpanded ? '' : 'active'}
