@@ -11,6 +11,7 @@ class JsonFixer {
    * @returns {Promise<object>} - 返回包含修复结果和错误信息的对象
    */
   static async fixJsonString(str) {
+    console.log('fixJsonString=====')
     try {
       // 首先尝试直接解析原始输入
       try {

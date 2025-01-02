@@ -758,7 +758,7 @@ class JsonEditor extends Component {
             jsonPart = this.customFormatJson(parsed);
           } catch (e) {
             // 如果解析失败，尝试修复非标准JSON
-            jsonPart = JsonFixer.fixJsonString(jsonPart);
+            // jsonPart = JsonFixer.fixJsonString(jsonPart);
           }
           
           result += jsonPart;
@@ -802,6 +802,7 @@ class JsonEditor extends Component {
    * @returns {string} - 格式化后的JSON字符串
    */
   customFormatJson = (obj, level = 0) => {
+    console.log('customFormatJson=====')
     const indent = '  '.repeat(level);
     const nextIndent = '  '.repeat(level + 1);
     
