@@ -181,9 +181,316 @@ class JsonEditor extends Component {
           isEditorMounted: true,
           placeholder: true
         });
+
+        // 监听折叠状态变化
+        const model = this.inputEditor.getModel();
+        if (model) {
+          // 记录上一次的折叠状态
+          let lastDecorations = new Set();
+          
+          model.onDidChangeDecorations(() => {
+            // 获取当前的折叠装饰器
+            const currentDecorations = new Set(
+              model.getAllDecorations()
+                .filter(d => d.options.description === 'folding-collapsed-highlighted-visual-decoration')
+                .map(d => `${d.range.startLineNumber}-${d.range.endLineNumber}`)
+            );
+
+            // 检查是否有新的折叠发生
+            const hasNewFolds = Array.from(currentDecorations).some(id => !lastDecorations.has(id));
+            
+            // 检查是否有展开发生
+            const hasUnfolds = Array.from(lastDecorations).some(id => !currentDecorations.has(id));
+
+            if (hasNewFolds) {
+              console.log('检测到新的折叠操作');
+              requestAnimationFrame(() => {
+                this.updateFoldingCounts();
+              });
+            } else if (hasUnfolds) {
+              console.log('检测到展开操作');
+              // 清除已展开区域的计数装饰器
+              const unfoldedDecorations = Array.from(lastDecorations)
+                .filter(id => !currentDecorations.has(id))
+                .map(id => {
+                  const [startLine] = id.split('-').map(Number);
+                  return startLine;
+                });
+
+              this.clearFoldingCountDecorations(unfoldedDecorations);
+            }
+
+            // 更新上一次的状态
+            lastDecorations = currentDecorations;
+          });
+        }
       }
     } catch (error) {
       console.error('Error initializing editor:', error);
+    }
+  };
+
+  /**
+   * 清除指定行的计数装饰器
+   */
+  clearFoldingCountDecorations = (lineNumbers) => {
+    if (!this.inputEditor) return;
+    const model = this.inputEditor.getModel();
+    if (!model) return;
+
+    // 获取所有计数装饰器
+    const oldDecorations = model.getAllDecorations()
+      .filter(d => {
+        // 检查是否是计数装饰器，且在指定的行号上
+        return d.options.after?.inlineClassName === 'folding-count-text' &&
+               lineNumbers.includes(d.range.startLineNumber);
+      })
+      .map(d => d.id);
+
+    if (oldDecorations.length > 0) {
+      model.deltaDecorations(oldDecorations, []);
+    }
+  };
+
+  /**
+   * 更新折叠区域的计数信息
+   */
+  updateFoldingCounts = () => {
+    console.log('开始更新折叠计数');
+    if (!this.inputEditor) {
+      console.log('编辑器实例不存在');
+      return;
+    }
+
+    const model = this.inputEditor.getModel();
+    if (!model) {
+      console.log('编辑器模型不存在');
+      return;
+    }
+
+    try {
+      // 获取所有装饰器
+      const decorations = model.getAllDecorations();
+      console.log('所有装饰器:', decorations);
+      
+      // 找出所有折叠的区域
+      const foldedRegions = decorations
+        .filter(d => {
+          // 只处理折叠装饰器
+          return d.options.description === 'folding-collapsed-highlighted-visual-decoration';
+        })
+        // 去重，避免重复处理相同的区域
+        .filter((d, index, self) => 
+          index === self.findIndex(t => (
+            t.range.startLineNumber === d.range.startLineNumber &&
+            t.range.endLineNumber === d.range.endLineNumber
+          ))
+        );
+
+      console.log('找到的折叠区域:', foldedRegions);
+
+      // 清除之前的计数装饰器
+      const oldDecorations = model.getAllDecorations()
+        .filter(d => d.options.after?.inlineClassName === 'folding-count-text')
+        .map(d => d.id);
+      
+      console.log('要清除的旧装饰器:', oldDecorations);
+      
+      if (oldDecorations.length > 0) {
+        model.deltaDecorations(oldDecorations, []);
+      }
+
+      // 为每个折叠区域计算并添加计数信息
+      const newDecorations = foldedRegions.map(region => {
+        try {
+          const startLineNumber = region.range.startLineNumber;
+          const endLineNumber = region.range.endLineNumber;
+          
+          // 获取完整的折叠内容
+          const content = model.getValueInRange({
+            startLineNumber,
+            startColumn: 1,
+            endLineNumber,
+            endColumn: model.getLineMaxColumn(endLineNumber)
+          });
+          
+          console.log('处理折叠区域:', {
+            startLine: startLineNumber,
+            endLine: endLineNumber,
+            content
+          });
+
+          // 尝试提取并解析JSON
+          try {
+            // 确保内容是完整的JSON
+            let jsonContent = content;
+            // 如果内容不是以 { 或 [ 开头，尝试找到第一个 { 或 [
+            const objectStart = content.indexOf('{');
+            const arrayStart = content.indexOf('[');
+            const start = objectStart >= 0 && arrayStart >= 0 
+              ? Math.min(objectStart, arrayStart)
+              : Math.max(objectStart, arrayStart);
+            
+            if (start >= 0) {
+              jsonContent = content.substring(start);
+              // 确保JSON内容是完整的
+              let bracketCount = 0;
+              let i = 0;
+              const openBracket = jsonContent[0];
+              const closeBracket = openBracket === '{' ? '}' : ']';
+              
+              while (i < jsonContent.length) {
+                if (jsonContent[i] === openBracket) bracketCount++;
+                if (jsonContent[i] === closeBracket) bracketCount--;
+                if (bracketCount === 0) {
+                  jsonContent = jsonContent.substring(0, i + 1);
+                  break;
+                }
+                i++;
+              }
+
+              console.log('提取的JSON内容:', jsonContent);
+              
+              // 确保JSON内容完整
+              if (!jsonContent.endsWith(closeBracket)) {
+                jsonContent += closeBracket;
+              }
+
+              const parsedContent = JSON.parse(jsonContent);
+              let count;
+              
+              if (openBracket === '[') {
+                // 如果是数组，计算元素数量
+                count = parsedContent.length;
+              } else {
+                // 如果是对象，只计算第一层的键数量
+                count = Object.keys(parsedContent).length;
+              }
+              console.log('计算得到的数量:', count);
+
+              return {
+                range: {
+                  startLineNumber,
+                  startColumn: 1,
+                  endLineNumber: startLineNumber,
+                  endColumn: model.getLineMaxColumn(startLineNumber)
+                },
+                options: {
+                  after: {
+                    content: ` (${count})`,
+                    inlineClassName: 'folding-count-text'
+                  }
+                }
+              };
+            }
+          } catch (e) {
+            console.log('JSON解析失败，尝试手动计算:', e);
+            // 如果解析失败，尝试手动计算
+            const hasObject = content.includes('{');
+            const hasArray = content.includes('[');
+            let count = 0;
+
+            if (hasObject) {
+              // 只匹配第一层的键值对
+              // 使用正则表达式匹配第一层的键值对
+              // 1. 从第一个 { 开始
+              // 2. 匹配不在嵌套对象或数组中的键值对
+              const firstBraceIndex = content.indexOf('{');
+              if (firstBraceIndex >= 0) {
+                let searchContent = content.substring(firstBraceIndex);
+                let level = 0;
+                let currentPos = 0;
+                let inString = false;
+                let keyCount = 0;
+                let foundColon = false;
+
+                while (currentPos < searchContent.length) {
+                  const char = searchContent[currentPos];
+                  
+                  if (char === '"' && searchContent[currentPos - 1] !== '\\') {
+                    inString = !inString;
+                  } else if (!inString) {
+                    if (char === '{' || char === '[') {
+                      level++;
+                    } else if (char === '}' || char === ']') {
+                      level--;
+                    } else if (char === ':' && level === 1) {
+                      foundColon = true;
+                    } else if (char === ',' && level === 1) {
+                      if (foundColon) {
+                        keyCount++;
+                        foundColon = false;
+                      }
+                    }
+                  }
+                  currentPos++;
+                }
+                
+                // 如果最后一个键值对后没有逗号，也要计数
+                if (foundColon) {
+                  keyCount++;
+                }
+                
+                count = keyCount;
+              }
+            } else if (hasArray) {
+              // 如果是数组，计算第一层的逗号数量加1
+              let level = 0;
+              let commaCount = 0;
+              let inString = false;
+              
+              for (let i = 0; i < content.length; i++) {
+                const char = content[i];
+                if (char === '"' && content[i - 1] !== '\\') {
+                  inString = !inString;
+                } else if (!inString) {
+                  if (char === '[' || char === '{') {
+                    level++;
+                  } else if (char === ']' || char === '}') {
+                    level--;
+                  } else if (char === ',' && level === 1) {
+                    commaCount++;
+                  }
+                }
+              }
+              count = commaCount + 1;
+            }
+            
+            if (count > 0) {
+              console.log('手动计算得到的数量:', count);
+              return {
+                range: {
+                  startLineNumber,
+                  startColumn: 1,
+                  endLineNumber: startLineNumber,
+                  endColumn: model.getLineMaxColumn(startLineNumber)
+                },
+                options: {
+                  after: {
+                    content: ` (${count})`,
+                    inlineClassName: 'folding-count-text'
+                  }
+                }
+              };
+            }
+          }
+        } catch (e) {
+          console.error('计算折叠计数时出错:', e);
+        }
+        return null;
+      }).filter(Boolean);
+
+      console.log('新创建的装饰器:', newDecorations);
+
+      // 应用新的装饰器
+      if (newDecorations.length > 0) {
+        const result = model.deltaDecorations([], newDecorations);
+        console.log('应用装饰器结果:', result);
+      } else {
+        console.log('没有新的装饰器需要应用');
+      }
+    } catch (e) {
+      console.error('更新折叠计数时出错:', e);
     }
   };
 
@@ -875,34 +1182,55 @@ class JsonEditor extends Component {
    */
   handleExpandAll = () => {
     try {
-      const editor = this.state.jsFilter ? this.outputEditor : this.inputEditor
-      if (!editor) return
+      const editor = this.state.jsFilter ? this.outputEditor : this.inputEditor;
+      if (!editor) return;
 
       // 用编辑器内置命令
-      editor.trigger('fold', 'editor.unfoldAll', null)
-      editor.focus()
+      editor.trigger('fold', 'editor.unfoldAll', null);
+      editor.focus();
+
+      // 清除所有计数装饰器
+      const model = editor.getModel();
+      if (model) {
+        const oldDecorations = model.getAllDecorations()
+          .filter(d => d.options.after?.inlineClassName === 'folding-count-text')
+          .map(d => d.id);
+        
+        if (oldDecorations.length > 0) {
+          model.deltaDecorations(oldDecorations, []);
+        }
+      }
     } catch (e) {
-      console.error('开失败:', e)
-      this.setState({ messageData: { type: 'error', message: '展开失败' } })
+      console.error('展开失败:', e);
+      this.setState({ messageData: { type: 'error', message: '展开失败' } });
     }
-  }
+  };
 
   /**
    * 全部折叠
    */
   handleCollapseAll = () => {
     try {
-      const editor = this.state.jsFilter ? this.outputEditor : this.inputEditor
-      if (!editor) return
+      console.log('开始执行全部折叠');
+      const editor = this.state.jsFilter ? this.outputEditor : this.inputEditor;
+      if (!editor) {
+        console.log('编辑器实例不存在');
+        return;
+      }
 
       // 使用编辑器内置命令
-      editor.trigger('fold', 'editor.foldAll', null)
-      editor.focus()
+      editor.trigger('fold', 'editor.foldAll', null);
+      editor.focus();
+
+      // 等待折叠动作完成后更新计数
+      setTimeout(() => {
+        this.updateFoldingCounts();
+      }, 100);
     } catch (e) {
-      console.error('折叠失败:', e)
-      this.setState({ messageData: { type: 'error', message: '折叠失败' } })
+      console.error('折叠失败:', e);
+      this.setState({ messageData: { type: 'error', message: '折叠失败' } });
     }
-  }
+  };
 
   /**
    * 压缩复制

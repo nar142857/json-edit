@@ -248,4 +248,28 @@
   border-bottom-color: #333;
 }
 
+/* 折叠计数样式 */
+.folding-count-text {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background-color: rgba(100, 100, 100, 0.1);
+  color: #666;
+  font-family: monospace;
+}
+
+/* 暗色主题下的计数样式 */
+.vs-dark .folding-count-text {
+  color: #bbb;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 高对比度主题下的计数样式 */
+.hc-black .folding-count-text {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
 
