@@ -35,7 +35,8 @@ import {
   Filter as FilterIcon,
   TextFields as TextFieldsIcon,
   Translate as TranslateIcon,
-  Build as BuildIcon
+  Build as BuildIcon,
+  SortByAlpha as SortIcon
 } from '@mui/icons-material'
 import { JsonService, FileService, EditorStateService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
@@ -1892,6 +1893,60 @@ class JsonEditor extends Component {
   };
 
   /**
+   * 对JSON对象按key进行升序排序
+   * @param {object} obj - 要排序的对象
+   * @returns {object} - 排序后的对象
+   */
+  sortJsonByKey = (obj) => {
+    if (Array.isArray(obj)) {
+      return obj.map(item => {
+        if (typeof item === 'object' && item !== null) {
+          return this.sortJsonByKey(item);
+        }
+        return item;
+      });
+    }
+    
+    if (typeof obj === 'object' && obj !== null) {
+      const sortedKeys = Object.keys(obj).sort();
+      const sortedObj = {};
+      
+      sortedKeys.forEach(key => {
+        if (typeof obj[key] === 'object' && obj[key] !== null) {
+          sortedObj[key] = this.sortJsonByKey(obj[key]);
+        } else {
+          sortedObj[key] = obj[key];
+        }
+      });
+      
+      return sortedObj;
+    }
+    
+    return obj;
+  }
+
+  /**
+   * 处理排序按钮点击事件
+   */
+  handleSort = () => {
+    try {
+      const content = this.inputEditor.getValue();
+      if (!content.trim()) {
+        return;
+      }
+
+      const jsonObj = JSON.parse(content);
+      const sortedObj = this.sortJsonByKey(jsonObj);
+      const sortedContent = JSON.stringify(sortedObj, null, 2);
+      
+      this.inputEditor.setValue(sortedContent);
+      this.showMessage('JSON已按key值升序排列');
+    } catch (error) {
+      this.showMessage('排序失败：' + error.message, 'error');
+    }
+  }
+
+  /**
    * 渲染组件
    * @returns {JSX.Element} 渲染的React组件
    */
@@ -1970,6 +2025,12 @@ class JsonEditor extends Component {
                   className={isExpanded ? '' : 'active'}
                 >
                   {isExpanded ? <CollapseIcon /> : <ExpandIcon />}
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="按key值升序排列">
+                <IconButton onClick={this.handleSort}>
+                  <SortIcon />
                 </IconButton>
               </Tooltip>
 

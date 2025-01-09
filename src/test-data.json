@@ -1,0 +1,83 @@
+{
+  "string": "Hello World",
+  "number": 42,
+  "float": 3.14159,
+  "boolean": true,
+  "null": null,
+  "emptyString": "",
+  "whitespace": "   ",
+  "specialChars": "!@#$%^&*()_+-=[]{}|;:,.<>?",
+  "unicode": "你好，世界！🌍",
+  "date": "2024-01-08T12:00:00Z",
+  "url": "https://example.com/path?param=value",
+  "email": "test@example.com",
+  "array": [
+    1,
+    "two",
+    true,
+    null,
+    { "nested": "object" }
+  ],
+  "emptyArray": [],
+  "object": {
+    "a": "alpha",
+    "b": "beta",
+    "c": "charlie"
+  },
+  "emptyObject": {},
+  "nestedObject": {
+    "level1": {
+      "level2": {
+        "level3": "deep value"
+      }
+    }
+  },
+  "arrayOfObjects": [
+    {
+      "id": 1,
+      "name": "First",
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "Second",
+      "active": false
+    },
+    {
+      "id": 3,
+      "name": "Third",
+      "active": true
+    }
+  ],
+  "objectWithArrays": {
+    "numbers": [1, 2, 3, 4, 5],
+    "strings": ["a", "b", "c"],
+    "mixed": [1, "two", true, null]
+  },
+  "types": {
+    "integer": 42,
+    "negativeInteger": -42,
+    "float": 3.14159,
+    "negativeFloat": -3.14159,
+    "string": "text",
+    "boolean": true,
+    "nullValue": null,
+    "date": "2024-01-08T12:00:00Z",
+    "array": [1, 2, 3],
+    "object": {"key": "value"}
+  },
+  "metadata": {
+    "created": "2024-01-08T12:00:00Z",
+    "version": "1.0.0",
+    "author": {
+      "name": "Test User",
+      "email": "test@example.com"
+    },
+    "tags": ["test", "sample", "demo"],
+    "settings": {
+      "enabled": true,
+      "mode": "test",
+      "timeout": 30
+    }
+  }
+} 
