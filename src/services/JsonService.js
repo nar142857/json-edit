@@ -21,18 +21,69 @@ class JsonService {
   }
 
   /**
+   * 处理大数值，防止精度丢失
+   * @param {string} text - JSON文本
+   * @returns {string} 处理后的JSON文本
+   */
+  _handleBigNumbers(text) {
+    console.log('Input text:', text);
+    
+    // 使用正则表达式匹配JSON中的大数值
+    // 1. 匹配键值对中的数字，包括负数、小数和科学计数法
+    // 2. 确保不匹配已经是字符串的数字
+    const processed = text.replace(/([:\s]\s*)([-]?\d+\.?\d*[eE]?[-+]?\d*)/g, (match, prefix, number) => {
+      console.log('Found match:', match);
+      console.log('Prefix:', prefix);
+      console.log('Number:', number);
+      
+      // 如果这个数字已经被引号包裹，直接返回
+      if (match.trim().startsWith('"') || match.trim().endsWith('"')) {
+        console.log('Number is already quoted, skipping');
+        return match;
+      }
+      
+      // 检查是否需要处理这个数字
+      const isScientific = number.includes('e') || number.includes('E');
+      const totalLength = number.replace(/[-.]/g, '').length;
+      const integerPartLength = number.split('.')[0].replace('-', '').length;
+      
+      console.log('Is scientific notation:', isScientific);
+      console.log('Total length:', totalLength);
+      console.log('Integer part length:', integerPartLength);
+      
+      if (isScientific || totalLength >= 16 || integerPartLength >= 16) {
+        const result = `${prefix}"${number}"`;
+        console.log('Converting to string:', result);
+        return result;
+      }
+      
+      console.log('No conversion needed');
+      return match;
+    });
+    
+    console.log('Processed text:', processed);
+    return processed;
+  }
+
+  /**
    * 格式化JSON
    * @param {string} text - JSON文本
    * @param {object} options - 格式化选项
    * @returns {Promise<string>} 格式化后的文本
    */
   async format(text, options = {}) {
+    console.log('Format input:', text);
+    // 先处理大数值
+    text = this._handleBigNumbers(text);
+    console.log('After handling big numbers:', text);
     const client = await this._getClient()
-    return client.format(text, {
+    const result = await client.format(text, {
       tabSize: 2,
       insertSpaces: true,
       ...options
-    })
+    });
+    console.log('Final formatted result:', result);
+    return result;
   }
 
   /**

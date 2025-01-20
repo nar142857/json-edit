@@ -1021,10 +1021,8 @@ class JsonEditor extends Component {
         (trimmedText.startsWith('[') && trimmedText.endsWith(']'))
       ) {
         try {
-          // 如果可以解析为JSON对象,说明是标准JSON
-          const parsed = JSON.parse(trimmedText);
-          // 直接使用JSON.stringify格式化
-          return JSON.stringify(parsed, null, 2);
+          // 使用JsonService处理大数值问题
+          return JsonService._handleBigNumbers(trimmedText);
         } catch (e) {
           // 解析失败,说明不是标准JSON,继续使用混合内容处理方式
           console.log('Not standard JSON, using mixed content handler');
@@ -1056,18 +1054,8 @@ class JsonEditor extends Component {
           // 尝试解析和格式化JSON部分
           let jsonPart = match[0];
           
-          // 尝试修复和解析JSON
-          try {
-            // 首先移除多余的空格和换行
-            jsonPart = jsonPart.replace(/^\s+|\s+$/g, '');
-            const parsed = JSON.parse(jsonPart);
-            
-            // 自定义格式化JSON
-            jsonPart = this.customFormatJson(parsed);
-          } catch (e) {
-            // 如果解析失败，尝试修复非标准JSON
-            // jsonPart = JsonFixer.fixJsonString(jsonPart);
-          }
+          // 使用JsonService处理大数值问题
+          jsonPart = JsonService._handleBigNumbers(jsonPart);
           
           result += jsonPart;
           
@@ -1082,7 +1070,7 @@ class JsonEditor extends Component {
         
         lastIndex = match.index + match[0].length;
       }
-      
+
       // 添加剩余的非JSON文本（保持原样）
       const remaining = text.slice(lastIndex);
       if (remaining) {

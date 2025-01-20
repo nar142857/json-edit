@@ -79,5 +79,32 @@
       "mode": "test",
       "timeout": 30
     }
+  },
+  "normalNumber": 12345,
+  "bigIntegers": {
+    "id": 123456789987654321012345,
+    "userId": 999999999999999999999999,
+    "timestamp": 1672531200000000000
+  },
+  "scientificNotation": {
+    "value1": 1.23456789e20,
+    "value2": 9.87654321e-15
+  },
+  "longDecimals": {
+    "price": 123456789.123456789,
+    "rate": 0.123456789987654321
+  },
+  "arrayWithBigNumbers": [
+    123456789987654321012345,
+    234567890098765432123456,
+    345678901234567890123456
+  ],
+  "mixedObject": {
+    "name": "test",
+    "bigValue": 987654321098765432109876,
+    "smallValue": 123,
+    "nestedObject": {
+      "deepBigValue": 876543210987654321098765
+    }
   }
 } 
