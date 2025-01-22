@@ -28,6 +28,7 @@ import {
   Label as LabelIcon,
   Close as CloseIcon,
   Save as SaveIcon,
+  SaveAlt as SaveAltIcon,
   Folder as FolderIcon,
   InsertDriveFile as FileIcon,
   History as HistoryIcon,
@@ -492,16 +493,17 @@ class JsonEditor extends Component {
    */
   handleEditorChange = (e) => {
     try {
+      console.log('Editor content changed');
       const content = this.inputEditor.getValue();
       
       // 更新占位符状态
       this.setState({ 
-        placeholder: !content.trim(),
-        content 
+        placeholder: !content.trim()
       });
       
       // 只标记内容变化，不触发保存
       if (content.trim() !== this.state.lastSavedContent) {
+        console.log('Content changed, marking as unsaved');
         this.hasUnsavedChanges = true;
       }
     } catch (error) {
@@ -537,7 +539,7 @@ class JsonEditor extends Component {
       window.utools.onPluginOut(() => {
         console.log('Plugin out, saving state...');
         if (this.hasUnsavedChanges && this.inputEditor) {
-          this.saveEditorState();
+          this.saveEditorState(true); // 关闭时检查内容变化
         }
       });
       console.log('Editor initialized and events bound');
@@ -741,153 +743,101 @@ class JsonEditor extends Component {
     // 只在实际关闭窗口且有未保存更改时保存
     if (this.hasUnsavedChanges) {
       // 在关闭前保存到历史记录
-      this.saveEditorState()
+      this.saveEditorState(true); // 关闭时检查内容变化
       // 清除未保存标记
       this.hasUnsavedChanges = false
     }
   }
 
   /**
-   * 保存编辑器状态
+   * 保存编辑器状态到历史记录
+   * @param {boolean} checkChanges - 是否需要检查内容变化，默认为 false
    */
-  saveEditorState = () => {
+  saveEditorState = (checkChanges = false) => {
     try {
-      const content = this.inputEditor.getValue().trim()
-      if (content && content !== this.state.lastSavedContent) {
-        EditorStateService.saveEditorState(content, this.state.label)
-        this.setState({ lastSavedContent: content })
-        this.hasUnsavedChanges = false
-        // 显示保存成功提示
-        this.setState({ 
-          messageData: { 
-            type: 'success', 
-            message: '已保存到历史记录' 
-          } 
-        })
+      const content = this.inputEditor.getValue().trim();
+      // 如果内容为空，不保存
+      if (!content) {
+        return;
       }
-    } catch (e) {
-      console.error('保存编辑器状态失败:', e)
+
+      // 如果需要检查变化且内容没有变化，不保存
+      if (checkChanges && content === this.state.lastSavedContent) {
+        return;
+      }
+
+      // 使用 EditorStateService 保存到历史记录
+      EditorStateService.saveEditorState(content, this.state.label);
+      
+      // 更新最后保存的内容
       this.setState({ 
-        messageData: { 
-          type: 'error', 
-          message: '保存历史记录失败: ' + e.message 
-        } 
-      })
-    }
-  }
-
-  /**
-   * 处理保存文件
-   */
-  handleSaveFile = async () => {
-    try {
-      const content = this.inputEditor.getValue()
-      if (!content.trim()) {
-        this.setState({ 
-          messageData: { 
-            type: 'warning', 
-            message: '内容为空，无保存' 
-          } 
-        })
-        return
-      }
-
-      const timestamp = this.getLocalTimestamp()
-      const fileName = `${this.state.label || 'json'}_${timestamp}.json`
-      
-      // 使用 uTools API 保存文件
-      const filePath = window.utools.showSaveDialog({
-        title: '保存 JSON 文件',
-        defaultPath: fileName,
-        filters: [
-          { name: 'JSON', extensions: ['json'] }
-        ]
-      })
-
-      if (!filePath) {
-        // 用户取消了保存
-        return
-      }
-
-      let contentToSave
-      try {
-        // 尝试格式化 JSON
-        contentToSave = JSON.stringify(JSON.parse(content), null, 2)
-      } catch (e) {
-        // 如果不是有效的 JSON，保存原始内容
-        contentToSave = content
-      }
-
-      // 使用 window.services 保存文件
-      await window.services.writeFile(filePath, contentToSave)
-      
-      // 同时保存到历史记录
-      this.saveEditorState()
-      
-      this.setState({ 
+        lastSavedContent: content,
         messageData: { 
           type: 'success', 
-          message: '文件保存成功' 
+          message: '已保存到历史记录' 
         } 
-      })
+      });
+      
+      // 清除未保存标记
+      this.hasUnsavedChanges = false;
     } catch (e) {
-      console.error('保存文件失败:', e)
+      console.error('保存到历史记录失败:', e);
       this.setState({ 
         messageData: { 
           type: 'error', 
-          message: '保存文件失败: ' + e.message 
+          message: '保存到历史记录失败: ' + e.message 
         } 
-      })
+      });
     }
-  }
+  };
 
   /**
    * 加载历史记录
    */
   loadHistory = () => {
     try {
-      const { history } = EditorStateService.getEditorHistory()
-      this.setState({ history })
+      const { history } = EditorStateService.getEditorHistory();
+      this.setState({ history });
     } catch (e) {
-      console.error('加载历史记录失败:', e)
+      console.error('加载历史记录失败:', e);
       this.setState({ 
         messageData: { 
           type: 'error', 
           message: '加载历史记录失败: ' + e.message 
         } 
-      })
+      });
     }
-  }
+  };
 
   /**
    * 处理历史菜单点击
    */
   handleHistoryMenuClick = (event) => {
-    this.setState({ historyMenuAnchor: event.currentTarget })
-    this.loadHistory()
-  }
+    this.setState({ historyMenuAnchor: event.currentTarget });
+    this.loadHistory();
+  };
 
   /**
    * 处理历史菜单关闭
    */
   handleHistoryMenuClose = () => {
-    this.setState({ historyMenuAnchor: null })
-  }
+    this.setState({ historyMenuAnchor: null });
+  };
 
   /**
    * 处理历史记录选择
    */
   handleHistorySelect = (item) => {
-    this.inputEditor.setValue(item.content)
+    this.inputEditor.setValue(item.content);
     this.setState({ 
       historyMenuAnchor: null,
       label: item.label,
       showLabelInput: true,
       lastSavedContent: item.content,
       messageData: { type: 'success', message: '历史记录加载成功' }
-    })
-    this.hasUnsavedChanges = false
-  }
+    });
+    this.hasUnsavedChanges = false;
+  };
 
   /**
    * 处理 JS 过滤器输入变化
@@ -1336,279 +1286,20 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 处理保存文件
-   */
-  handleSaveFile = async () => {
-    try {
-      const content = this.inputEditor.getValue()
-      if (!content.trim()) {
-        this.setState({ 
-          messageData: { 
-            type: 'warning', 
-            message: '内容为空，无保存' 
-          } 
-        })
-        return
-      }
-
-      const timestamp = this.getLocalTimestamp()
-      const fileName = `${this.state.label || 'json'}_${timestamp}.json`
-      
-      // 使用 uTools API 保存文件
-      const filePath = window.utools.showSaveDialog({
-        title: '保存 JSON 文件',
-        defaultPath: fileName,
-        filters: [
-          { name: 'JSON', extensions: ['json'] }
-        ]
-      })
-
-      if (!filePath) {
-        // 用户取消了保存
-        return
-      }
-
-      let contentToSave
-      try {
-        // 尝试格式化 JSON
-        contentToSave = JSON.stringify(JSON.parse(content), null, 2)
-      } catch (e) {
-        // 如果不是有效的 JSON，保存原始内容
-        contentToSave = content
-      }
-
-      // 使用 window.services 保存文件
-      await window.services.writeFile(filePath, contentToSave)
-      this.setState({ 
-        messageData: { 
-          type: 'success', 
-          message: '文件保存成功' 
-        } 
-      })
-    } catch (e) {
-      console.error('保存文件失败:', e)
-      this.setState({ 
-        messageData: { 
-          type: 'error', 
-          message: '保存文件失败: ' + e.message 
-        } 
-      })
-    }
-  }
-
-  /**
-   * 加载文件列表
-   */
-  loadJsonFiles = async () => {
-    try {
-      // 获取保存文件的路径
-      const filePath = window.utools.getPath('downloads')
-      
-      // 使用 FileService 打开文件选择对话框
-      const result = await FileService.readOpenFileText(['json'], 'JSON', '选择JSON文件')
-      
-      // 如果用户选择了文件，添加到列表中
-      if (result) {
-        const jsonFiles = [{
-          name: result.name,
-          path: result.path,
-          modifiedTime: new Date().getTime()
-        }]
-        
-        this.setState({ jsonFiles })
-      }
-    } catch (e) {
-      // 如果用户取消选择，不显示错误
-      if (e === '未发现合法文件') {
-        return
-      }
-      
-      console.error('加载文件列表失败:', e)
-      this.setState({ 
-        messageData: { 
-          type: 'error', 
-          message: '加载文件列表失败: ' + e.message 
-        } 
-      })
-    }
-  }
-
-  /**
-   * 处理文件菜单点击
-   */
-  handleFileMenuClick = (event) => {
-    this.setState({ fileMenuAnchor: event.currentTarget })
-    this.loadJsonFiles()
-  }
-
-  /**
-   * 处理文件菜单关闭
-   */
-  handleFileMenuClose = () => {
-    this.setState({ fileMenuAnchor: null })
-  }
-
-  /**
-   * 处理文件选择
-   */
-  handleFileSelect = async (filePath) => {
-    try {
-      // 读取文件内容
-      const text = await window.services.readFile(filePath)
-      
-      // 置编辑器内容
-      this.inputEditor.setValue(text)
-
-      // 从文件路径中提取标签（去除日期部分）
-      const fileName = filePath.split(/[/\\]/).pop() // 同时处理正斜杠和反斜杠
-        .replace(/\.json$/, '') // 去掉扩展名
-        .replace(/_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/, '') // 去掉时间
-
-      this.setState({ 
-        fileMenuAnchor: null,
-        messageData: { type: 'success', message: '文件加载成功' },
-        label: fileName,
-        showLabelInput: true
-      })
-    } catch (e) {
-      console.error('读取文件失败:', e)
-      this.setState({ 
-        messageData: { 
-          type: 'error', 
-          message: '读取文件失败: ' + e.message 
-        } 
-      })
-    }
-  }
-
-  /**
-   * 监听粘贴事件
-   */
-  listenPaste = () => {
-    if (!this.editorRef.current) {
-      console.warn('Editor element not ready for paste listener');
-      return;
-    }
-
-    this.editorRef.current.addEventListener('paste', e => {
-      const text = e.clipboardData.getData('text');
-      if (!text || !this.inputEditor) return;
-
-      // 编辑器为空时的处理
-      if (!this.inputEditor.getValue()) {
-        e.stopPropagation();
-        e.preventDefault();
-        this.inputEditor.setValue(text);
-        // 使用 requestAnimationFrame 确保在下一帧执行格式化
-        requestAnimationFrame(() => this.handleReFormat());
-        return;
-      }
-
-      // 检查是否全选状态
-      const selection = this.inputEditor.getSelection();
-      if (
-        selection.startLineNumber === 1 && 
-        selection.startColumn === 1 &&
-        (
-          selection.startLineNumber !== selection.endLineNumber ||
-          selection.startColumn !== selection.endColumn
-        )
-      ) {
-        const model = this.inputEditor.getModel();
-        const lastLine = model.getLineCount();
-        const lastColumn = model.getLineContent(lastLine).length + 1;
-        
-        // 全选态下的粘贴处理
-        if (
-          selection.endLineNumber === lastLine && 
-          selection.endColumn === lastColumn
-        ) {
-          e.stopPropagation();
-          e.preventDefault();
-          this.inputEditor.setValue(text);
-          // 使用 requestAnimationFrame 确保在下一帧执行格式化
-          requestAnimationFrame(() => this.handleReFormat());
-        }
-      }
-    }, true);
-  };
-
-  /**
-   * 监听插件进入事件
-   */
-  listenPluginEnter = () => {
-    window.utools.onPluginEnter(({ type, payload }) => {
-      console.log('Plugin Enter:', type, payload);
-      
-      if (type === 'regex' || type === 'over') {
-        this.setState({ placeholder: false, jsFilter: '' });
-        this.inputContentObject = null;
-        
-        try {
-          let content = payload.trim();
-          console.log('Original content:', content);
-          
-          // 尝试在文本中查找并格式化JSON部分
-          content = this.formatJsonInText(content);
-          console.log('Formatted content:', content);
-          
-          // 设置编辑器内容
-          if (this.inputEditor) {
-            this.inputEditor.setValue(content);
-            
-            // 格式化内容
-            requestAnimationFrame(() => {
-              this.handleReFormat();
-              // 确保编辑器获得焦点
-              this.inputEditor.focus();
-            });
-            
-            // 保存到历史记录
-            if (window.fs && window.fs.saveEditorState) {
-              window.fs.saveEditorState(content, 'From uTools Search');
-            }
-          } else {
-            console.error('Editor not initialized');
-          }
-        } catch (error) {
-          console.error('处理输入数据失败:', error);
-          if (this.inputEditor) {
-            this.inputEditor.setValue(payload);
-            this.inputEditor.focus();
-          }
-        }
-      } else if (type === 'files') {
-        this.setState({ placeholder: false, jsFilter: '' });
-        this.inputContentObject = null;
-        if (this.inputEditor) {
-          this.inputEditor.setValue(window.services.readFileContent(payload[0].path));
-          this.inputEditor.focus();
-        }
-      } else {
-        if (this.inputEditor) {
-          const hasContent = this.inputEditor.getValue().trim();
-          this.setState({ placeholder: !hasContent });
-          this.inputEditor.focus();
-        }
-      }
-    });
-  };
-
-  /**
    * 处理键盘快捷键
    */
   handleKeyDown = (e) => {
-    // 获取作系统信息
+    // 获取操作系统信息
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
 
-    // Ctrl/Command + S: 保存文件
+    // Ctrl/Command + S: 保存到历史记录
     if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 's') {
       e.preventDefault()
-      this.handleSaveFile()
+      this.saveEditorState()
       return
     }
 
-    // Ctrl/Command + T: 切换标签输入框显状态
+    // Ctrl/Command + T: 切换标签输入框显示状态
     if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 't') {
       e.preventDefault()
       this.handleLabelClick()
@@ -1661,20 +1352,6 @@ class JsonEditor extends Component {
     if (e.altKey && e.key === 'w') {
       e.preventDefault()
       this.handleCollapse()
-      return
-    }
-
-    // Alt + T: 转为 TypeScript
-    if (e.altKey && e.key === 't') {
-      e.preventDefault()
-      this.handleToTypeScript()
-      return
-    }
-
-    // Alt + M: 转为 XML
-    if (e.altKey && e.key === 'm') {
-      e.preventDefault()
-      this.handleToXml()
       return
     }
   }
@@ -1980,6 +1657,153 @@ class JsonEditor extends Component {
   }
 
   /**
+   * 处理保存文件
+   */
+  handleSaveFile = async () => {
+    try {
+      const content = this.inputEditor.getValue();
+      if (!content.trim()) {
+        this.setState({ 
+          messageData: { 
+            type: 'warning', 
+            message: '内容为空，无需保存' 
+          } 
+        });
+        return;
+      }
+
+      const timestamp = this.getLocalTimestamp();
+      const fileName = `${this.state.label || 'json'}_${timestamp}.json`;
+      
+      // 使用 uTools API 保存文件
+      const filePath = window.utools.showSaveDialog({
+        title: '保存 JSON 文件',
+        defaultPath: fileName,
+        filters: [
+          { name: 'JSON', extensions: ['json'] }
+        ]
+      });
+
+      if (!filePath) {
+        // 用户取消了保存
+        return;
+      }
+
+      let contentToSave;
+      try {
+        // 尝试格式化 JSON
+        contentToSave = JSON.stringify(JSON.parse(content), null, 2);
+      } catch (e) {
+        // 如果不是有效的 JSON，保存原始内容
+        contentToSave = content;
+      }
+
+      // 使用 window.services 保存文件
+      await window.services.writeFile(filePath, contentToSave);
+      
+      this.setState({ 
+        messageData: { 
+          type: 'success', 
+          message: '文件保存成功' 
+        } 
+      });
+    } catch (e) {
+      console.error('保存文件失败:', e);
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '保存文件失败: ' + e.message 
+        } 
+      });
+    }
+  };
+
+  /**
+   * 加载文件列表
+   */
+  loadJsonFiles = async () => {
+    try {
+      // 获取保存文件的路径
+      const filePath = window.utools.getPath('downloads');
+      
+      // 使用 FileService 打开文件选择对话框
+      const result = await FileService.readOpenFileText(['json'], 'JSON', '选择JSON文件');
+      
+      // 如果用户选择了文件，添加到列表中
+      if (result) {
+        const jsonFiles = [{
+          name: result.name,
+          path: result.path,
+          modifiedTime: new Date().getTime()
+        }];
+        
+        this.setState({ jsonFiles });
+      }
+    } catch (e) {
+      // 如果用户取消选择，不显示错误
+      if (e === '未发现合法文件') {
+        return;
+      }
+      
+      console.error('加载文件列表失败:', e);
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '加载文件列表失败: ' + e.message 
+        } 
+      });
+    }
+  };
+
+  /**
+   * 处理文件菜单点击
+   */
+  handleFileMenuClick = (event) => {
+    this.setState({ fileMenuAnchor: event.currentTarget });
+    this.loadJsonFiles();
+  };
+
+  /**
+   * 处理文件菜单关闭
+   */
+  handleFileMenuClose = () => {
+    this.setState({ fileMenuAnchor: null });
+  };
+
+  /**
+   * 处理文件选择
+   */
+  handleFileSelect = async (filePath) => {
+    try {
+      // 读取文件内容
+      const text = await window.services.readFile(filePath);
+      
+      // 设置编辑器内容
+      this.inputEditor.setValue(text);
+
+      // 从文件路径中提取标签（去除日期部分）
+      const fileName = filePath.split(/[/\\]/).pop() // 同时处理正斜杠和反斜杠
+        .replace(/\.json$/, '') // 去掉扩展名
+        .replace(/_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/, ''); // 去掉时间
+
+      this.setState({ 
+        fileMenuAnchor: null,
+        messageData: { type: 'success', message: '文件加载成功' },
+        label: fileName,
+        showLabelInput: true
+      });
+    } catch (e) {
+      console.error('读取文件失败:', e);
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '读取文件失败: ' + e.message 
+        } 
+      });
+    }
+  };
+
+  /**
    * 渲染组件
    * @returns {JSX.Element} 渲染的React组件
    */
@@ -2078,7 +1902,7 @@ class JsonEditor extends Component {
                 </IconButton>
               </Tooltip>
 
-              <Tooltip title="保存文件「Ctrl/⌘ + S」">
+              <Tooltip title="保存到文件">
                 <IconButton onClick={this.handleSaveFile}>
                   <SaveIcon />
                 </IconButton>
@@ -2090,6 +1914,12 @@ class JsonEditor extends Component {
                   className={Boolean(fileMenuAnchor) ? 'active' : ''}
                 >
                   <FolderIcon />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="保存到历史记录「Ctrl/⌘ + S」">
+                <IconButton onClick={this.saveEditorState}>
+                  <SaveAltIcon />
                 </IconButton>
               </Tooltip>
 
