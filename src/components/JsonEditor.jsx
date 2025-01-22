@@ -117,18 +117,10 @@ class JsonEditor extends Component {
     
     // JS过滤器延时处理定时器
     this.jsFilterInputDelayTimer = null;
-    this.autoSaveTimer = null;
-    this.needsSave = false;
+    this.hasUnsavedChanges = false;
 
     // 初始化标签输入框的ref
     this.labelInputRef = React.createRef();
-
-    // 使用 lodash 的 debounce 优化自动保存
-    this.autoSave = debounce(() => {
-      if (this.needsSave) {
-        this.saveEditorState();
-      }
-    }, 1000);
 
     // 绑定方法到实例
     this.listenPaste = this.listenPaste.bind(this);
@@ -508,11 +500,10 @@ class JsonEditor extends Component {
         content 
       });
       
-      // 如果内容发生变化，标记需要保存
-      this.needsSave = true;
-      
-      // 触发自动保存
-      this.autoSave();
+      // 只标记内容变化，不触发保存
+      if (content.trim() !== this.state.lastSavedContent) {
+        this.hasUnsavedChanges = true;
+      }
     } catch (error) {
       console.error('Error handling editor change:', error);
     }
@@ -542,6 +533,13 @@ class JsonEditor extends Component {
       this.listenPaste();
       window.addEventListener('keydown', this.handleKeyDown);
       this.listenPluginEnter();
+      // 添加插件离开事件监听
+      window.utools.onPluginOut(() => {
+        console.log('Plugin out, saving state...');
+        if (this.hasUnsavedChanges && this.inputEditor) {
+          this.saveEditorState();
+        }
+      });
       console.log('Editor initialized and events bound');
     });
   }
@@ -699,9 +697,6 @@ class JsonEditor extends Component {
       this.handleEditorContentChange()
     })
 
-    // 启动自动保存
-    this.startAutoSave()
-
     // 监听窗口关闭事件
     window.addEventListener('beforeunload', this.handleBeforeUnload)
 
@@ -709,35 +704,47 @@ class JsonEditor extends Component {
   }
 
   /**
-   * 加载编辑器状态
+   * 处理输入编辑器内容变化
+   * 主要功能：
+   * 1. 监听编辑器内容变化
+   * 2. 根据内容是否为空设置 placeholder 的显示/隐藏
+   * 3. 尝试解析 JSON 内容
+   * 4. 如果存在 JS 过滤器则更新输出
    */
-  loadEditorState = () => {
+  handleEditorContentChange = () => {
     try {
-      if (!this.inputEditor) return
-
-      const { currentContent, currentLabel } = window.fs.getEditorHistory()
-      if (currentContent) {
-        this.inputEditor.setValue(currentContent)
-        this.setState({ lastSavedContent: currentContent })
+      const currentContent = this.inputEditor.getValue()
+      
+      // 根据编辑器内容设置 placeholder 状态
+      this.setState({ placeholder: !currentContent.trim() })
+      
+      // 更新输出编辑器
+      if (this.state.jsFilter) {
+        this.updateOutputWithFilter(currentContent)
+      } else {
+        this.outputEditor.setValue(currentContent)
       }
-      if (currentLabel) {
-        this.setState({ label: currentLabel })
+
+      // 只标记内容已更改，不触发保存
+      if (currentContent.trim() !== this.state.lastSavedContent) {
+        this.hasUnsavedChanges = true
       }
     } catch (e) {
-      console.error('加载编辑器状态失败:', e)
+      console.error('处理编辑器内容变化失败:', e)
     }
   }
 
   /**
-   * 启动自动保存
+   * 处理窗口关闭前保存
    */
-  startAutoSave = () => {
-    if (this.autoSaveTimer) {
-      clearInterval(this.autoSaveTimer)
+  handleBeforeUnload = (event) => {
+    // 只在实际关闭窗口且有未保存更改时保存
+    if (this.hasUnsavedChanges) {
+      // 在关闭前保存到历史记录
+      this.saveEditorState()
+      // 清除未保存标记
+      this.hasUnsavedChanges = false
     }
-    this.autoSaveTimer = setInterval(() => {
-      this.autoSave()
-    }, 30000)
   }
 
   /**
@@ -746,22 +753,91 @@ class JsonEditor extends Component {
   saveEditorState = () => {
     try {
       const content = this.inputEditor.getValue().trim()
-      if (content) {
+      if (content && content !== this.state.lastSavedContent) {
         EditorStateService.saveEditorState(content, this.state.label)
         this.setState({ lastSavedContent: content })
-        this.needsSave = false
+        this.hasUnsavedChanges = false
+        // 显示保存成功提示
+        this.setState({ 
+          messageData: { 
+            type: 'success', 
+            message: '已保存到历史记录' 
+          } 
+        })
       }
     } catch (e) {
       console.error('保存编辑器状态失败:', e)
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '保存历史记录失败: ' + e.message 
+        } 
+      })
     }
   }
 
   /**
-   * 处理窗口关闭前保存
+   * 处理保存文件
    */
-  handleBeforeUnload = () => {
-    if (this.needsSave) {
+  handleSaveFile = async () => {
+    try {
+      const content = this.inputEditor.getValue()
+      if (!content.trim()) {
+        this.setState({ 
+          messageData: { 
+            type: 'warning', 
+            message: '内容为空，无保存' 
+          } 
+        })
+        return
+      }
+
+      const timestamp = this.getLocalTimestamp()
+      const fileName = `${this.state.label || 'json'}_${timestamp}.json`
+      
+      // 使用 uTools API 保存文件
+      const filePath = window.utools.showSaveDialog({
+        title: '保存 JSON 文件',
+        defaultPath: fileName,
+        filters: [
+          { name: 'JSON', extensions: ['json'] }
+        ]
+      })
+
+      if (!filePath) {
+        // 用户取消了保存
+        return
+      }
+
+      let contentToSave
+      try {
+        // 尝试格式化 JSON
+        contentToSave = JSON.stringify(JSON.parse(content), null, 2)
+      } catch (e) {
+        // 如果不是有效的 JSON，保存原始内容
+        contentToSave = content
+      }
+
+      // 使用 window.services 保存文件
+      await window.services.writeFile(filePath, contentToSave)
+      
+      // 同时保存到历史记录
       this.saveEditorState()
+      
+      this.setState({ 
+        messageData: { 
+          type: 'success', 
+          message: '文件保存成功' 
+        } 
+      })
+    } catch (e) {
+      console.error('保存文件失败:', e)
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '保存文件失败: ' + e.message 
+        } 
+      })
     }
   }
 
@@ -810,38 +886,7 @@ class JsonEditor extends Component {
       lastSavedContent: item.content,
       messageData: { type: 'success', message: '历史记录加载成功' }
     })
-    this.needsSave = false
-  }
-
-  /**
-   * 处理输入编辑器内容变化
-   * 主要功能：
-   * 1. 监听编辑器内容变化
-   * 2. 根据内容是否为制 placeholder 的显示/隐藏
-   * 3. 尝试解析 JSON 内容
-   * 4. 如果存在 JS 过滤器则更新输出
-   */
-  handleEditorContentChange = () => {
-    try {
-      const currentContent = this.inputEditor.getValue()
-      
-      // 根据编辑器内容设置 placeholder 状态
-      this.setState({ placeholder: !currentContent.trim() })
-      
-      // 更新输出编辑器
-      if (this.state.jsFilter) {
-        this.updateOutputWithFilter(currentContent)
-      } else {
-        this.outputEditor.setValue(currentContent)
-      }
-
-      // 标记需要保存
-      if (currentContent.trim() && currentContent !== this.state.lastSavedContent) {
-        this.needsSave = true
-      }
-    } catch (e) {
-      console.error('处理编辑器内容变化失败:', e)
-    }
+    this.hasUnsavedChanges = false
   }
 
   /**
@@ -1332,7 +1377,7 @@ class JsonEditor extends Component {
         contentToSave = content
       }
 
-      // 使用 window.services 保存件
+      // 使用 window.services 保存文件
       await window.services.writeFile(filePath, contentToSave)
       this.setState({ 
         messageData: { 
