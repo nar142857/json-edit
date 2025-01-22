@@ -37,7 +37,8 @@ import {
   TextFields as TextFieldsIcon,
   Translate as TranslateIcon,
   Build as BuildIcon,
-  SortByAlpha as SortIcon
+  SortByAlpha as SortIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material'
 import { JsonService, FileService, EditorStateService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
@@ -837,6 +838,35 @@ class JsonEditor extends Component {
       messageData: { type: 'success', message: '历史记录加载成功' }
     });
     this.hasUnsavedChanges = false;
+  };
+
+  /**
+   * 处理历史记录删除
+   */
+  handleHistoryDelete = (item, event) => {
+    event.stopPropagation(); // 阻止事件冒泡，避免触发选择事件
+    try {
+      // 调用 EditorStateService 删除历史记录
+      EditorStateService.deleteEditorState(item.id);
+      
+      // 更新历史记录列表
+      this.loadHistory();
+      
+      this.setState({ 
+        messageData: { 
+          type: 'success', 
+          message: '历史记录已删除' 
+        } 
+      });
+    } catch (e) {
+      console.error('删除历史记录失败:', e);
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '删除历史记录失败: ' + e.message 
+        } 
+      });
+    }
   };
 
   /**
@@ -2016,14 +2046,31 @@ class JsonEditor extends Component {
                 </MenuItem>
               ) : (
                 history.map(item => (
-                  <MenuItem key={item.id} onClick={() => this.handleHistorySelect(item)}>
-                    <ListItemIcon>
-                      <HistoryIcon fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={item.label || '未命名'} 
-                      secondary={new Date(item.timestamp).toLocaleString()}
-                    />
+                  <MenuItem 
+                    key={item.id} 
+                    onClick={() => this.handleHistorySelect(item)}
+                    sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      minWidth: '300px' // 设置最小宽度
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <ListItemIcon>
+                        <HistoryIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={item.label || '未命名'} 
+                        secondary={new Date(item.timestamp).toLocaleString()}
+                      />
+                    </div>
+                    <IconButton 
+                      size="small" 
+                      onClick={(e) => this.handleHistoryDelete(item, e)}
+                      sx={{ ml: 1 }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
                   </MenuItem>
                 ))
               )}

@@ -77,6 +77,24 @@ class EditorStateService {
   }
 
   /**
+   * 删除指定的历史记录
+   * @param {string} id - 要删除的记录ID
+   * @returns {boolean} 删除是否成功
+   */
+  deleteEditorState(id) {
+    try {
+      const cache = this.readCache();
+      // 找到并删除指定ID的记录
+      cache.history = cache.history.filter(item => item.id !== id);
+      // 写入更新后的缓存
+      return this.writeCache(cache);
+    } catch (e) {
+      console.error('删除历史记录失败:', e);
+      throw e;
+    }
+  }
+
+  /**
    * 获取编辑器历史记录
    */
   getEditorHistory() {
