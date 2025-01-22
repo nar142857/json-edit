@@ -1948,7 +1948,7 @@ class JsonEditor extends Component {
               </Tooltip>
 
               <Tooltip title="保存到历史记录「Ctrl/⌘ + S」">
-                <IconButton onClick={this.saveEditorState}>
+                <IconButton onClick={() => this.saveEditorState(false)}>
                   <SaveAltIcon />
                 </IconButton>
               </Tooltip>
