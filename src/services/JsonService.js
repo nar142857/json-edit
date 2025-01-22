@@ -31,16 +31,10 @@ class JsonService {
     // 使用正则表达式匹配JSON中的大数值
     // 1. 匹配键值对中的数字，包括负数、小数和科学计数法
     // 2. 确保不匹配已经是字符串的数字
-    const processed = text.replace(/([:\s]\s*)([-]?\d+\.?\d*[eE]?[-+]?\d*)/g, (match, prefix, number) => {
+    const processed = text.replace(/([:\s]\s*)([-]?\d+\.?\d*[eE]?[-+]?\d*(?=[\s,\n\r\]}]))/g, (match, prefix, number) => {
       console.log('Found match:', match);
       console.log('Prefix:', prefix);
       console.log('Number:', number);
-      
-      // 如果这个数字已经被引号包裹，直接返回
-      if (match.trim().startsWith('"') || match.trim().endsWith('"')) {
-        console.log('Number is already quoted, skipping');
-        return match;
-      }
       
       // 检查是否需要处理这个数字
       const isScientific = number.includes('e') || number.includes('E');
