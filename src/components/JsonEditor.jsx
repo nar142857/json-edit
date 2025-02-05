@@ -1342,14 +1342,21 @@ class JsonEditor extends Component {
    * 处理键盘快捷键
    */
   handleKeyDown = (e) => {
+    // If diff mode is active and Escape key is pressed, close diff mode and restore editor content
+    if (e.key === 'Escape' && this.state.isDiffMode) {
+      e.preventDefault();
+      this.handleEscCloseDiff();
+      return;
+    }
+
     // 获取操作系统信息
-    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
     // Ctrl/Command + S: 保存到历史记录
     if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 's') {
-      e.preventDefault()
-      this.saveEditorState()
-      return
+      e.preventDefault();
+      this.saveEditorState();
+      return;
     }
 
     // Ctrl/Command + T: 切换标签输入框显示状态
@@ -2201,6 +2208,27 @@ class JsonEditor extends Component {
       } 
     });
   }
+
+  // Added ESC key handler for diff mode: Closes diff mode and restores original content without applying any diff changes
+  handleEscCloseDiff = () => {
+    if (!this.state.isDiffMode) return;
+    const originalContent = this.state.originalValue;
+    this.setState({
+      isDiffMode: false,
+      originalValue: '',
+      modifiedValue: ''
+    }, () => {
+      if (this.editorRef.current) {
+        this.initMonacoEditor();
+        if (this.inputEditor) {
+          this.inputEditor.setValue(originalContent);
+          requestAnimationFrame(() => {
+            this.inputEditor.focus();
+          });
+        }
+      }
+    });
+  };
 }
 
 export default JsonEditor 
