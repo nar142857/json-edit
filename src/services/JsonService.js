@@ -27,8 +27,11 @@ export default class JsonService {
    */
   _handleBigNumbers(text) {
     return text.replace(/([:\s]\s*)([-]?\d+\.?\d*[eE]?[-+]?\d*(?=[\s,\n\r\]}]))/g, (match, prefix, number) => {
-      // 判断是否大数值...
-      return `${prefix}"${number}"`;
+      // 仅处理超过15位的整数
+      if (number.length > 15 && !number.includes('.') && !number.includes('e') && !number.includes('E')) {
+        return `${prefix}"${number}"`;
+      }
+      return match; // 保持原样
     });
   }
 
