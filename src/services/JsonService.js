@@ -3,7 +3,7 @@
  */
 import * as monaco from 'monaco-editor'
 
-class JsonService {
+export default class JsonService {
   constructor() {
     this._worker = null
     this._client = null
@@ -26,37 +26,10 @@ class JsonService {
    * @returns {string} 处理后的JSON文本
    */
   _handleBigNumbers(text) {
-    console.log('Input text:', text);
-    
-    // 使用正则表达式匹配JSON中的大数值
-    // 1. 匹配键值对中的数字，包括负数、小数和科学计数法
-    // 2. 确保不匹配已经是字符串的数字
-    const processed = text.replace(/([:\s]\s*)([-]?\d+\.?\d*[eE]?[-+]?\d*(?=[\s,\n\r\]}]))/g, (match, prefix, number) => {
-      console.log('Found match:', match);
-      console.log('Prefix:', prefix);
-      console.log('Number:', number);
-      
-      // 检查是否需要处理这个数字
-      const isScientific = number.includes('e') || number.includes('E');
-      const totalLength = number.replace(/[-.]/g, '').length;
-      const integerPartLength = number.split('.')[0].replace('-', '').length;
-      
-      console.log('Is scientific notation:', isScientific);
-      console.log('Total length:', totalLength);
-      console.log('Integer part length:', integerPartLength);
-      
-      if (isScientific || totalLength >= 16 || integerPartLength >= 16) {
-        const result = `${prefix}"${number}"`;
-        console.log('Converting to string:', result);
-        return result;
-      }
-      
-      console.log('No conversion needed');
-      return match;
+    return text.replace(/([:\s]\s*)([-]?\d+\.?\d*[eE]?[-+]?\d*(?=[\s,\n\r\]}]))/g, (match, prefix, number) => {
+      // 判断是否大数值...
+      return `${prefix}"${number}"`;
     });
-    
-    console.log('Processed text:', processed);
-    return processed;
   }
 
   /**
@@ -155,6 +128,4 @@ class JsonService {
     }
     return this._client
   }
-}
-
-export default new JsonService() 
+} 

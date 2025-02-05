@@ -40,7 +40,8 @@ import {
   SortByAlpha as SortIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material'
-import { JsonService, FileService, EditorStateService } from '../services'
+import JsonService from '../services/JsonService'
+import { FileService, EditorStateService } from '../services'
 import MessageSnackbar from './MessageSnackbar'
 import './JsonEditor.css'
 import { debounce } from 'lodash'
@@ -127,6 +128,9 @@ class JsonEditor extends Component {
     // 绑定方法到实例
     this.listenPaste = this.listenPaste.bind(this);
     this.handleKeyDown = this.handleKeyDown.bind(this);
+
+    // 在需要的地方实例化
+    this.jsonService = new JsonService();
   }
 
   /**
@@ -149,11 +153,13 @@ class JsonEditor extends Component {
 
       // 基础编辑器配置
       const editorConfig = {
-        value: '',
+        value: this.props.initialValue || '',
         language: 'json',
-        theme: theme === 'dark' ? 'vs-dark' : 'vs-light',
+        theme: theme === 'dark' ? 'vs-dark' : 'vs',
         automaticLayout: true,
+        scrollBeyondLastLine: false,
         minimap: { enabled: false },
+        fontSize: 14,
         lineNumbers: 'on',
         folding: true,
         formatOnPaste: true,
@@ -169,12 +175,16 @@ class JsonEditor extends Component {
 
       // 添加内容变化监听器
       if (this.inputEditor) {
-        this.inputEditor.onDidChangeModelContent(this.handleEditorChange);
+        this.inputEditor.onDidChangeModelContent(
+          debounce(() => {
+            this.handleEditorChange(); // 这里可能调用格式化
+          }, 300)
+        );
         
         // 初始化时设置占位符状态
         this.setState({ 
           isEditorMounted: true,
-          placeholder: true
+          placeholder: !this.inputEditor.getValue().trim()
         });
 
         // 监听折叠状态变化
@@ -582,58 +592,55 @@ class JsonEditor extends Component {
    * 监听粘贴事件
    */
   listenPaste = () => {
-    if (!this.editorRef.current) {
-      console.warn('Editor element not ready for paste listener');
-      return;
-    }
-
     const pasteHandler = (e) => {
-      const text = e.clipboardData.getData('text');
-      if (!text || !this.inputEditor) return;
+      console.log('粘贴事件触发，开始处理...');
+      // 获取粘贴板内容
+      const text = e.clipboardData.getData('text/plain');
+      console.log('原始粘贴内容:', text);
+      
+      if (!text) return;
 
-      // 编辑器为空时的处理
-      if (!this.inputEditor.getValue()) {
-        e.stopPropagation();
-        e.preventDefault();
-        this.inputEditor.setValue(text);
-        // 使用 requestAnimationFrame 确保在下一帧执行格式化
-        requestAnimationFrame(() => this.handleReFormat());
-        return;
-      }
-
-      // 检查是否全选状态
-      const selection = this.inputEditor.getSelection();
-      if (
-        selection.startLineNumber === 1 && 
-        selection.startColumn === 1 &&
-        (
-          selection.startLineNumber !== selection.endLineNumber ||
-          selection.startColumn !== selection.endColumn
-        )
-      ) {
-        const model = this.inputEditor.getModel();
-        const lastLine = model.getLineCount();
-        const lastColumn = model.getLineContent(lastLine).length + 1;
+      // 阻止默认粘贴行为
+      e.preventDefault();
+      
+      // 执行自定义粘贴处理
+      try {
+        // 格式化内容
+        console.log('开始格式化粘贴内容...');
+        const formatted = this.formatJsonInText(text);
+        console.log('格式化后内容:', formatted);
         
-        // 全选态下的粘贴处理
-        if (
-          selection.endLineNumber === lastLine && 
-          selection.endColumn === lastColumn
-        ) {
-          e.stopPropagation();
-          e.preventDefault();
-          this.inputEditor.setValue(text);
-          // 使用 requestAnimationFrame 确保在下一帧执行格式化
-          requestAnimationFrame(() => this.handleReFormat());
-        }
+        // 使用 executeEdits 保持撤销堆栈
+        this.inputEditor.executeEdits('paste', [{
+          range: this.inputEditor.getSelection(),
+          text: formatted,
+          forceMoveMarkers: true
+        }]);
+
+        // 手动触发重新格式化
+        requestAnimationFrame(() => {
+          console.log('触发重新格式化...');
+          this.handleReFormat();
+          this.handleExpandAll();
+        });
+
+      } catch (e) {
+        console.error('粘贴处理失败:', e);
+        // 回退到原始粘贴内容
+        console.log('使用原始内容回退...');
+        this.inputEditor.executeEdits('paste', [{
+          range: this.inputEditor.getSelection(),
+          text: text,
+          forceMoveMarkers: true
+        }]);
       }
     };
 
-    // 添加粘贴事件监听器
-    this.editorRef.current.addEventListener('paste', pasteHandler, true);
-    
-    // 保存 handler 引用以便后续移除
-    this.pasteHandler = pasteHandler;
+    // 添加事件监听
+    if (this.editorRef.current) {
+      console.log('注册粘贴事件监听器');
+      this.editorRef.current.addEventListener('paste', pasteHandler);
+    }
   };
 
   /**
@@ -1007,28 +1014,21 @@ class JsonEditor extends Component {
   };
 
   /**
-   * 重新格式化
+   * 重新格式化（使用编辑器内置方法）
    */
-  handleReFormat = () => {
+  handleReFormat = async () => {
     try {
-      const value = this.inputEditor.getValue();
+      const editor = this.inputEditor;
+      // 通过命令触发格式化
+      await editor.getAction('editor.action.formatDocument').run();
+
+      // 保持光标位置
+      const position = editor.getPosition();
+      editor.setPosition(position);
       
-      // 使用与 listenPluginEnter 相关的理逻辑
-      const formattedContent = this.formatJsonInText(value);
-      
-      // 更新编辑器内容
-      this.inputEditor.setValue(formattedContent);
-      
-      // 清除错误消息
-      this.setState({ messageData: null });
+      this.showMessage('格式化完成');
     } catch (e) {
-      console.error('格式化失败:', e);
-      this.setState({ 
-        messageData: { 
-          type: 'error', 
-          message: '格式化失败: ' + e.message 
-        } 
-      });
+      this.showMessage(`格式化失败: ${e.message}`, 'error');
     }
   }
 
@@ -1038,6 +1038,7 @@ class JsonEditor extends Component {
    * @returns {string} - 处理后的文本
    */
   formatJsonInText = (text) => {
+    console.log('formatJsonInText====')
     try {
       // 1. 首先尝试判断是否为标准JSON
       const trimmedText = text.trim();
@@ -1046,70 +1047,47 @@ class JsonEditor extends Component {
         (trimmedText.startsWith('[') && trimmedText.endsWith(']'))
       ) {
         try {
-          // 使用JsonService处理大数值问题
-          return JsonService._handleBigNumbers(trimmedText);
+          return this.jsonService._handleBigNumbers(trimmedText);
         } catch (e) {
-          // 解析失败,说明不是标准JSON,继续使用混合内容处理方式
-          console.log('Not standard JSON, using mixed content handler');
+          // 解析失败时尝试修复
+          const fixed = JsonFixer.fixJsonString(trimmedText);
+          if (fixed.success) return fixed.result;
+          throw e;
         }
       }
 
       // 2. 处理混合内容
-      // 匹配可能的JSON结构（更宽松的模式）
       const jsonRegex = /({[\s\S]*?}|\[[\s\S]*?\])/g;
       let lastIndex = 0;
       let result = '';
       let match;
 
       while ((match = jsonRegex.exec(text)) !== null) {
-        // 添加JSON之前的文本（保持原样）
         const prefix = text.slice(lastIndex, match.index);
-        
-        // 处理前缀文本，保留其格式但去除多余空行
-        if (prefix) {
-          const trimmedPrefix = prefix.replace(/\n{2,}/g, '\n').trimEnd();
-          result += trimmedPrefix;
-          // 如果前缀不是以换行结尾添加一个换行
-          if (!trimmedPrefix.endsWith('\n')) {
-            result += '\n';
-          }
-        }
-        
+        result += prefix;
+
         try {
-          // 尝试解析和格式化JSON部分
-          let jsonPart = match[0];
-          
-          // 使用JsonService处理大数值问题
-          jsonPart = JsonService._handleBigNumbers(jsonPart);
-          
-          result += jsonPart;
-          
-          // 在JSON块后添加一个换行（如果后面还有内容）
-          if (match.index + match[0].length < text.length) {
-            result += '\n';
-          }
+          // 解析并重新格式化JSON部分
+          const jsonPart = JSON.parse(match[0]);
+          result += JSON.stringify(jsonPart, null, 2);
         } catch (e) {
-          // 如果处理失败，保持原样
+          // 解析失败保持原样
           result += match[0];
         }
-        
+
         lastIndex = match.index + match[0].length;
       }
 
-      // 添加剩余的非JSON文本（保持原样）
-      const remaining = text.slice(lastIndex);
-      if (remaining) {
-        // 处理剩余本，保留格式但去除多余空行
-        const trimmedRemaining = remaining.replace(/\n{2,}/g, '\n').trimStart();
-        // 如果前面有内容且不是以换行结尾，先添加换行
-        if (result && !result.endsWith('\n') && trimmedRemaining) {
-          result += '\n';
-        }
-        result += trimmedRemaining;
-      }
+      // 添加剩余内容
+      result += text.slice(lastIndex);
       
-      // 确保最终结果不会有多余的空行，并保持适当的缩进
-      return result.replace(/\n{3,}/g, '\n\n').trim() || text;
+      // 最后整体格式化一次
+      try {
+        const finalParsed = JSON.parse(result);
+        return JSON.stringify(finalParsed, null, 2);
+      } catch (e) {
+        return result;
+      }
     } catch (e) {
       console.error('格式化JSON文本失败:', e);
       return text;
@@ -1670,19 +1648,61 @@ class JsonEditor extends Component {
    */
   handleSort = () => {
     try {
-      const content = this.inputEditor.getValue();
-      if (!content.trim()) {
-        return;
-      }
-
-      const jsonObj = JSON.parse(content);
-      const sortedObj = this.sortJsonByKey(jsonObj);
-      const sortedContent = JSON.stringify(sortedObj, null, 2);
+      const value = this.inputEditor.getValue();
+      console.log('[排序] 原始输入:', value);
       
-      this.inputEditor.setValue(sortedContent);
-      this.showMessage('JSON已按key值升序排列');
-    } catch (error) {
-      this.showMessage('排序失败：' + error.message, 'error');
+      // 先处理大数值再解析
+      const processedValue = this.jsonService._handleBigNumbers(value);
+      console.log('[排序] 处理后的大数值:', processedValue);
+      
+      const jsonObj = JSON.parse(processedValue, (k, v) => {
+        console.log(`[解析] 处理键: ${k}, 值类型: ${typeof v}, 原始值: ${v}`);
+        
+        if (typeof v === 'string' && /^"\d+$/.test(v)) {
+          console.log(`[解析] 检测到大数值字符串: ${v}`);
+          return v.replace(/^"|"$/g, '');
+        }
+        return v;
+      });
+      console.log('[排序] 解析后的对象:', jsonObj);
+      
+      // 递归排序对象键
+      const sortKeys = (obj) => {
+        if (typeof obj !== 'object' || obj === null) return obj;
+        console.log(`[排序] 排序对象类型: ${Array.isArray(obj) ? '数组' : '对象'}`);
+        
+        if (Array.isArray(obj)) {
+          return obj.map(sortKeys);
+        }
+        
+        const sortedKeys = Object.keys(obj).sort((a, b) => a.localeCompare(b));
+        const sortedObj = {};
+        for (const key of sortedKeys) {
+          sortedObj[key] = sortKeys(obj[key]);
+        }
+        return sortedObj;
+      };
+      
+      const sorted = sortKeys(jsonObj);
+      console.log('[排序] 排序后的对象:', sorted);
+      
+      // 保持大数值的字符串形式
+      const sortedJson = JSON.stringify(sorted, (k, v) => {
+        console.log(`[序列化] 处理键: ${k}, 值类型: ${typeof v}, 原始值: ${v}`);
+        
+        if (typeof v === 'string' && /^\d{16,}$/.test(v)) {
+          console.log(`[序列化] 检测到大数值字符串: ${v}`);
+          return v; // 直接返回字符串值，JSON.stringify会自动添加引号
+        }
+        return v;
+      }, 2);
+      
+      console.log('[排序] 最终生成的JSON:', sortedJson);
+      this.inputEditor.setValue(sortedJson);
+      this.showMessage('排序完成');
+    } catch (e) {
+      console.error('[排序] 完整错误堆栈:', e.stack);
+      this.showMessage(`排序失败: ${e.message}`, 'error');
     }
   }
 
@@ -1731,20 +1751,10 @@ class JsonEditor extends Component {
       // 使用 window.services 保存文件
       await window.services.writeFile(filePath, contentToSave);
       
-      this.setState({ 
-        messageData: { 
-          type: 'success', 
-          message: '文件保存成功' 
-        } 
-      });
+      this.showMessage('文件保存成功');
     } catch (e) {
       console.error('保存文件失败:', e);
-      this.setState({ 
-        messageData: { 
-          type: 'error', 
-          message: '保存文件失败: ' + e.message 
-        } 
-      });
+      this.showMessage('保存文件失败: ' + e.message, 'error');
     }
   };
 
@@ -1776,12 +1786,7 @@ class JsonEditor extends Component {
       }
       
       console.error('加载文件列表失败:', e);
-      this.setState({ 
-        messageData: { 
-          type: 'error', 
-          message: '加载文件列表失败: ' + e.message 
-        } 
-      });
+      this.showMessage('加载文件列表失败: ' + e.message, 'error');
     }
   };
 
@@ -1824,12 +1829,7 @@ class JsonEditor extends Component {
       });
     } catch (e) {
       console.error('读取文件失败:', e);
-      this.setState({ 
-        messageData: { 
-          type: 'error', 
-          message: '读取文件失败: ' + e.message 
-        } 
-      });
+      this.showMessage('读取文件失败: ' + e.message, 'error');
     }
   };
 
@@ -2094,6 +2094,67 @@ class JsonEditor extends Component {
       }
     })
     console.error('Error:', error, errorInfo)
+  }
+
+  // 补充 listenPluginEnter 方法实现
+  listenPluginEnter = () => {
+    // 监听插件进入事件（从uTools主输入框进入时）
+    window.utools.onPluginEnter(({ code, type, payload }) => {
+      console.log('Plugin entered with:', { code, type, payload });
+
+      // 排除纯指令的情况（修正判断逻辑）
+      const isCommand = [
+        'json', 'format', 'compress', 
+        'escape', 'unescape', 'filter'
+      ].some(cmd => {
+        // 只检查payload内容，忽略code参数
+        const payloadContent = typeof payload === 'string' ? payload : JSON.stringify(payload);
+        return payloadContent?.toLowerCase()?.trim() === cmd;
+      });
+
+      console.log('isCommand===', isCommand);
+      
+      // 处理所有有效内容（排除指令）
+      if (payload && !isCommand) {
+        try {
+          const text = typeof payload === 'string' 
+            ? payload.trim()
+            : JSON.stringify(payload, null, 2);
+
+          console.log('text===', text);
+            
+          // 确保编辑器已初始化
+          if (!this.inputEditor) this.initMonacoEditor();
+          
+          // 设置内容并延迟格式化
+          this.inputEditor.setValue(text);
+          requestAnimationFrame(() => {
+            this.handleReFormat();
+            this.handleExpandAll();
+          });
+          
+          // 显示操作反馈
+          this.showMessage('内容已自动加载');
+
+        } catch (e) {
+          console.error('内容处理失败:', e);
+        }
+      }
+    });
+  };
+
+  /**
+   * 显示消息提示
+   * @param {string} message - 消息内容
+   * @param {string} type - 消息类型（success/error/info）
+   */
+  showMessage = (message, type = 'success') => {
+    this.setState({ 
+      messageData: { 
+        type, 
+        message 
+      } 
+    });
   }
 }
 
