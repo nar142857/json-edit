@@ -1225,32 +1225,77 @@ class JsonEditor extends Component {
   };
 
   /**
-   * 压缩复制
+   * 处理压缩复制
    */
   handleCompressCopy = () => {
     try {
-      const value = this.inputEditor.getValue()
-      const compressed = JSON.stringify(JSON.parse(value))
-      window.utools.copyText(compressed)
-      this.setState({ messageData: { type: 'success', message: 'Copied' } })
+      const value = this.inputEditor.getValue();
+      console.log('[压缩] 原始输入:', value);
+      
+      // 处理大数值并保持字符串形式
+      const processed = this.jsonService._handleBigNumbers(value);
+      console.log('[压缩] 处理后的大数值:', processed);
+      
+      const jsonObj = JSON.parse(processed, (k, v) => {
+        console.log(`[解析] 处理键: ${k}, 值类型: ${typeof v}, 原始值: ${v}`);
+        if (typeof v === 'string' && /^"\d+$/.test(v)) {
+          console.log(`[解析] 检测到大数值字符串: ${v}`);
+          return v.replace(/^"|"$/g, '');
+        }
+        return v;
+      });
+      console.log('[压缩] 解析后的对象:', jsonObj);
+      
+      const compressed = JSON.stringify(jsonObj, (k, v) => {
+        console.log(`[序列化] 处理键: ${k}, 值类型: ${typeof v}, 原始值: ${v}`);
+        return typeof v === 'string' && /^\d{16,}$/.test(v) ? v : v;
+      });
+      console.log('[压缩] 最终结果:', compressed);
+      
+      navigator.clipboard.writeText(compressed);
+      this.showMessage('压缩内容已复制');
     } catch (e) {
-      this.setState({ messageData: { type: 'error', message: 'Invalid JSON format' } })
+      console.error('[压缩] 完整错误堆栈:', e.stack);
+      this.showMessage(`压缩失败: ${e.message}`, 'error');
     }
-  }
+  };
 
   /**
-   * 压缩转义复制
+   * 处理压缩转义复制
    */
-  handleCompressQuoteCopy = () => {
+  handleCompressEscapeCopy = () => {
     try {
-      const value = this.inputEditor.getValue()
-      const compressed = JSON.stringify(JSON.parse(value)).replace(/"/g, '\\"')
-      window.utools.copyText(compressed)
-      this.setState({ messageData: { type: 'success', message: 'Copied' } })
+      const value = this.inputEditor.getValue();
+      console.log('[压缩转义] 原始输入:', value);
+      
+      // 处理大数值并保持字符串形式
+      const processed = this.jsonService._handleBigNumbers(value);
+      console.log('[压缩转义] 处理后的大数值:', processed);
+      
+      const jsonObj = JSON.parse(processed, (k, v) => {
+        console.log(`[解析] 处理键: ${k}, 值类型: ${typeof v}, 原始值: ${v}`);
+        if (typeof v === 'string' && /^"\d+$/.test(v)) {
+          console.log(`[解析] 检测到大数值字符串: ${v}`);
+          return v.replace(/^"|"$/g, '');
+        }
+        return v;
+      });
+      console.log('[压缩转义] 解析后的对象:', jsonObj);
+      
+      const compressed = JSON.stringify(jsonObj, (k, v) => {
+        console.log(`[序列化] 处理键: ${k}, 值类型: ${typeof v}, 原始值: ${v}`);
+        return typeof v === 'string' && /^\d{16,}$/.test(v) ? v : v;
+      });
+      console.log('[压缩转义] 最终结果:', compressed);
+      
+      const escaped = compressed.replace(/"/g, '\\"');
+      navigator.clipboard.writeText(escaped);
+      this.showMessage('转义压缩内容已复制');
     } catch (e) {
-      this.setState({ messageData: { type: 'error', message: 'Invalid JSON format' } })
+      console.error('[压缩转义] 完整错误堆栈:', e.stack);
+      this.showMessage(`转义压缩失败: ${e.message}`, 'error');
     }
-  }
+  };
 
   /**
    * 处理标签按钮点击
@@ -1991,7 +2036,7 @@ class JsonEditor extends Component {
               </Tooltip>
 
               <Tooltip title="压缩转义复制「Alt + \」">
-                <IconButton onClick={this.handleCompressQuoteCopy}>
+                <IconButton onClick={this.handleCompressEscapeCopy}>
                   <CodeIcon />
                 </IconButton>
               </Tooltip>
