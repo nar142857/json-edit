@@ -167,7 +167,12 @@ class JsonEditor extends Component {
         scrollBeyondLastLine: false,
         wordWrap: 'on',
         fontSize: 14,
-        tabSize: 2
+        tabSize: 2,
+        // 添加find widget配置
+        find: {
+          addExtraSpaceOnTop: true,
+          globalFindClipboard: true
+        }
       };
 
       // 创建编辑器实例
@@ -593,6 +598,21 @@ class JsonEditor extends Component {
    */
   listenPaste = () => {
     const pasteHandler = (e) => {
+      // 检查事件目标是否是Monaco编辑器的内容区域
+      const target = e.target;
+      const isMonacoEditor = target.closest('.monaco-editor');
+      const isSearchInput = target.closest('.monaco-editor .find-widget');
+      
+      // 如果是搜索框的粘贴事件，不处理
+      if (isSearchInput) {
+        return;
+      }
+      
+      // 如果不是编辑器区域的粘贴，也不处理
+      if (!isMonacoEditor) {
+        return;
+      }
+
       console.log('粘贴事件触发，开始处理...');
       // 获取粘贴板内容
       const text = e.clipboardData.getData('text/plain');
