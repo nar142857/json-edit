@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "webpack --mode development --watch",
     "build": "webpack --mode production",
-    "package": "node scripts/package.js"
+    "package": "node scripts/package.js",
+    "build:web": "webpack --config webpack.web.config.js --mode production",
+    "dev:web": "webpack serve --config webpack.web.config.js --mode development --open",
+    "serve:web": "serve web-dist"
   },
   "dependencies": {
     "@emotion/react": "^11.11.1",
@@ -29,15 +32,18 @@
     "copy-webpack-plugin": "^11.0.0",
     "css-loader": "^6.8.1",
     "file-loader": "^6.2.0",
+    "html-webpack-plugin": "^5.6.3",
     "mini-css-extract-plugin": "^2.7.6",
     "monaco-editor-webpack-plugin": "^7.1.0",
     "path-browserify": "^1.0.1",
     "process": "^0.11.10",
+    "serve": "^14.2.4",
     "stream-browserify": "^3.0.0",
     "style-loader": "^3.3.3",
     "url": "^0.11.3",
     "util": "^0.12.5",
     "webpack": "^5.89.0",
-    "webpack-cli": "^5.1.4"
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^4.15.2"
   }
 }

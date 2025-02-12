@@ -524,5 +524,41 @@ Monaco Editor 会自动高亮显示差异
   - 在差异对比模式下，按ESC键会关闭差异对比并恢复原始内容
  
 
+## 网站部署
+除了作为 uTools 插件使用，本项目也支持部署为独立的网站。
+
+### 开发环境
+```bash
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run dev:web
+```
+
+### 生产环境构建
+```bash
+# 构建网站版本
+npm run build:web
+
+# 本地预览构建结果
+npm run serve:web
+```
+
+### 部署说明
+1. 运行 `npm run build:web` 命令会在 `web-dist` 目录生成优化后的静态文件
+2. 将 `web-dist` 目录下的所有文件上传到你的网站服务器
+3. 确保你的网站服务器配置正确：
+   - 设置正确的 MIME 类型
+   - 启用 gzip 压缩
+   - 配置适当的缓存策略
+   - 如果使用 CDN，确保配置正确的缓存刷新规则
+
+### 浏览器兼容性
+- Chrome >= 60
+- Firefox >= 60
+- Safari >= 12
+- Edge >= 79
+
 
 
