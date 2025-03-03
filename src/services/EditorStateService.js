@@ -95,6 +95,21 @@ class EditorStateService {
   }
 
   /**
+   * 删除所有历史记录
+   * @returns {boolean} 删除是否成功
+   */
+  deleteAllHistory() {
+    try {
+      const cache = this.readCache();
+      cache.history = [];
+      return this.writeCache(cache);
+    } catch (e) {
+      console.error('删除所有历史记录失败:', e);
+      throw e;
+    }
+  }
+
+  /**
    * 获取编辑器历史记录
    */
   getEditorHistory() {

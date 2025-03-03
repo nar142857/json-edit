@@ -2131,34 +2131,43 @@ class JsonEditor extends Component {
                   <ListItemText primary="没有历史记录" />
                 </MenuItem>
               ) : (
-                history.map(item => (
-                  <MenuItem 
-                    key={item.id} 
-                    onClick={() => this.handleHistorySelect(item)}
-                    sx={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between',
-                      minWidth: '300px' // 设置最小宽度
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <ListItemIcon>
-                        <HistoryIcon fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary={item.label || '未命名'} 
-                        secondary={new Date(item.timestamp).toLocaleString()}
-                      />
-                    </div>
-                    <IconButton 
-                      size="small" 
-                      onClick={(e) => this.handleHistoryDelete(item, e)}
-                      sx={{ ml: 1 }}
-                    >
+                <>
+                  <MenuItem onClick={this.handleDeleteAllHistory}>
+                    <ListItemIcon>
                       <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    </ListItemIcon>
+                    <ListItemText primary="删除全部历史" />
                   </MenuItem>
-                ))
+                  <Divider />
+                  {history.map(item => (
+                    <MenuItem 
+                      key={item.id} 
+                      onClick={() => this.handleHistorySelect(item)}
+                      sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between',
+                        minWidth: '300px' // 设置最小宽度
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <ListItemIcon>
+                          <HistoryIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary={item.label || '未命名'} 
+                          secondary={new Date(item.timestamp).toLocaleString()}
+                        />
+                      </div>
+                      <IconButton 
+                        size="small" 
+                        onClick={(e) => this.handleHistoryDelete(item, e)}
+                        sx={{ ml: 1 }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </MenuItem>
+                  ))}
+                </>
               )}
             </Menu>
 
@@ -2409,6 +2418,36 @@ class JsonEditor extends Component {
       console.error('[Unicode解码] 错误:', e);
       console.error('[Unicode解码] 错误堆栈:', e.stack);
       this.showMessage(`Unicode解码失败: ${e.message}`, 'error');
+    }
+  };
+
+  /**
+   * 处理全部删除历史记录
+   */
+  handleDeleteAllHistory = () => {
+    try {
+      // 调用 EditorStateService 删除所有历史记录
+      EditorStateService.deleteAllHistory();
+      
+      // 更新历史记录列表
+      this.loadHistory();
+      
+      // 关闭菜单
+      this.setState({ 
+        historyMenuAnchor: null,
+        messageData: { 
+          type: 'success', 
+          message: '所有历史记录已删除' 
+        } 
+      });
+    } catch (e) {
+      console.error('删除所有历史记录失败:', e);
+      this.setState({ 
+        messageData: { 
+          type: 'error', 
+          message: '删除所有历史记录失败: ' + e.message 
+        } 
+      });
     }
   };
 }
