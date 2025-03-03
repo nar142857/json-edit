@@ -38,7 +38,9 @@ import {
   Translate as TranslateIcon,
   Build as BuildIcon,
   SortByAlpha as SortIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  EnhancedEncryption as EncodeIcon,
+  LockOpen as DecodeIcon
 } from '@mui/icons-material'
 import JsonService from '../services/JsonService'
 import { FileService, EditorStateService } from '../services'
@@ -2079,6 +2081,18 @@ class JsonEditor extends Component {
                   <TextFieldsIcon />
                 </IconButton>
               </Tooltip>
+
+              <Tooltip title="Unicode编码">
+                <IconButton onClick={this.handleUnicodeEncode}>
+                  <EncodeIcon />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="Unicode解码">
+                <IconButton onClick={this.handleUnicodeDecode}>
+                  <DecodeIcon />
+                </IconButton>
+              </Tooltip>
             </div>
 
             {/* 文件菜单 */}
@@ -2248,6 +2262,154 @@ class JsonEditor extends Component {
         }
       }
     });
+  };
+
+  /**
+   * 处理Unicode编码
+   */
+  handleUnicodeEncode = () => {
+    try {
+      console.log('[Unicode编码] 开始处理');
+      const value = this.inputEditor.getValue();
+      console.log('[Unicode编码] 获取到的编辑器内容:', value);
+
+      if (!value.trim()) {
+        console.log('[Unicode编码] 内容为空，退出处理');
+        this.showMessage('内容为空，无需编码', 'warning');
+        return;
+      }
+
+      // 尝试解析JSON
+      let jsonObj;
+      try {
+        console.log('[Unicode编码] 尝试解析为JSON');
+        jsonObj = JSON.parse(value);
+        console.log('[Unicode编码] JSON解析成功:', jsonObj);
+      } catch (e) {
+        console.log('[Unicode编码] 不是有效的JSON，直接处理整个文本');
+        const encoded = this.jsonService.encodeToUnicode(value);
+        console.log('[Unicode编码] 编码结果:', encoded);
+        console.log('[Unicode编码] 准备更新编辑器内容');
+        this.inputEditor.setValue(encoded);
+        console.log('[Unicode编码] 编辑器内容已更新');
+        this.showMessage('Unicode编码完成');
+        return;
+      }
+
+      // 如果是JSON，递归处理所有字符串值
+      console.log('[Unicode编码] 开始递归处理JSON');
+      const processObject = (obj) => {
+        if (typeof obj === 'string') {
+          console.log('[Unicode编码] 处理字符串:', obj);
+          const result = this.jsonService.encodeToUnicode(obj);
+          console.log('[Unicode编码] 字符串处理结果:', result);
+          return result;
+        }
+        if (Array.isArray(obj)) {
+          console.log('[Unicode编码] 处理数组:', obj);
+          return obj.map(item => processObject(item));
+        }
+        if (typeof obj === 'object' && obj !== null) {
+          console.log('[Unicode编码] 处理对象:', obj);
+          const result = {};
+          for (const [key, value] of Object.entries(obj)) {
+            result[key] = processObject(value);
+          }
+          return result;
+        }
+        return obj;
+      };
+
+      const processed = processObject(jsonObj);
+      console.log('[Unicode编码] 处理后的对象:', processed);
+      
+      const encoded = JSON.stringify(processed, null, 2);
+      console.log('[Unicode编码] 格式化后的JSON:', encoded);
+      
+      console.log('[Unicode编码] 准备更新编辑器内容');
+      this.inputEditor.setValue(encoded);
+      console.log('[Unicode编码] 编辑器内容已更新');
+      
+      this.showMessage('Unicode编码完成');
+    } catch (e) {
+      console.error('[Unicode编码] 错误:', e);
+      console.error('[Unicode编码] 错误堆栈:', e.stack);
+      this.showMessage(`Unicode编码失败: ${e.message}`, 'error');
+    }
+  };
+
+  /**
+   * 处理Unicode解码
+   */
+  handleUnicodeDecode = () => {
+    try {
+      console.log('[Unicode解码] 开始处理');
+      const value = this.inputEditor.getValue();
+      console.log('[Unicode解码] 获取到的编辑器内容:', value);
+
+      if (!value.trim()) {
+        console.log('[Unicode解码] 内容为空，退出处理');
+        this.showMessage('内容为空，无需解码', 'warning');
+        return;
+      }
+
+      // 尝试解析JSON
+      let jsonObj;
+      try {
+        console.log('[Unicode解码] 尝试解析为JSON');
+        jsonObj = JSON.parse(value);
+        console.log('[Unicode解码] JSON解析成功:', jsonObj);
+      } catch (e) {
+        console.log('[Unicode解码] 不是有效的JSON，直接处理整个文本');
+        const decoded = this.jsonService.decodeFromUnicode(value);
+        console.log('[Unicode解码] 解码结果:', decoded);
+        console.log('[Unicode解码] 准备更新编辑器内容');
+        this.inputEditor.setValue(decoded);
+        console.log('[Unicode解码] 编辑器内容已更新');
+        this.showMessage('Unicode解码完成');
+        return;
+      }
+
+      // 如果是JSON，递归处理所有字符串值
+      console.log('[Unicode解码] 开始递归处理JSON');
+      const processObject = (obj) => {
+        if (typeof obj === 'string') {
+          console.log('[Unicode解码] 处理字符串:', obj);
+          const result = this.jsonService.decodeFromUnicode(obj);
+          console.log('[Unicode解码] 字符串处理结果:', result);
+          return result;
+        }
+        if (Array.isArray(obj)) {
+          console.log('[Unicode解码] 处理数组:', obj);
+          return obj.map(item => processObject(item));
+        }
+        if (typeof obj === 'object' && obj !== null) {
+          console.log('[Unicode解码] 处理对象:', obj);
+          const result = {};
+          for (const [key, value] of Object.entries(obj)) {
+            result[key] = processObject(value);
+          }
+          return result;
+        }
+        return obj;
+      };
+
+      const processed = processObject(jsonObj);
+      console.log('[Unicode解码] 处理后的对象:', processed);
+      
+      const decoded = JSON.stringify(processed, null, 2);
+      console.log('[Unicode解码] 格式化后的JSON:', decoded);
+      
+      console.log('[Unicode解码] 准备更新编辑器内容');
+      this.inputEditor.setValue(decoded);
+      console.log('[Unicode解码] 编辑器内容已更新');
+      
+      this.showMessage('Unicode解码完成');
+    } catch (e) {
+      console.error('[Unicode解码] 错误:', e);
+      console.error('[Unicode解码] 错误堆栈:', e.stack);
+      this.showMessage(`Unicode解码失败: ${e.message}`, 'error');
+    }
   };
 }
 

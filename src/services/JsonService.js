@@ -131,4 +131,37 @@ export default class JsonService {
     }
     return this._client
   }
+
+  /**
+   * 将文本转换为Unicode编码
+   * @param {string} text - 要转换的文本
+   * @returns {string} - Unicode编码后的文本
+   */
+  encodeToUnicode(text) {
+    try {
+      return text.replace(/[\u0000-\uffff]/g, char => {
+        const hex = char.charCodeAt(0).toString(16).toUpperCase();
+        return '\\u' + '0000'.substring(0, 4 - hex.length) + hex;
+      });
+    } catch (e) {
+      console.error('Unicode编码失败:', e);
+      throw new Error('Unicode编码失败: ' + e.message);
+    }
+  }
+
+  /**
+   * 将Unicode编码转换回普通文本
+   * @param {string} text - Unicode编码的文本
+   * @returns {string} - 解码后的文本
+   */
+  decodeFromUnicode(text) {
+    try {
+      return text.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => {
+        return String.fromCharCode(parseInt(hex, 16));
+      });
+    } catch (e) {
+      console.error('Unicode解码失败:', e);
+      throw new Error('Unicode解码失败: ' + e.message);
+    }
+  }
 } 
